@@ -5,3 +5,4 @@ __pycache__/
 .Python
 *.py[cod]
 *$py.class
+dbconfig.py
