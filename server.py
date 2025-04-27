@@ -37,7 +37,7 @@ class Alert(BaseModel):
 # ========== YARDIMCI FONKSİYONLAR ==========
 
 def connect_db():
-    return mysql.connector.connect(**dbconfig.db_config)
+    return mysql.connector.connect(**dbconfig.db_config) # dbconfig.py'den ayarları al gitignoreda var
 
 def insert_sensor_data(data: SensorData):
     try:
