@@ -5,9 +5,18 @@ from typing import Optional, List
 import mysql.connector
 from mysql.connector import Error
 import dbconfig
-
+from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI()
 api_prefix = "/api"
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Geliştirme ortamı için böyle açık bırak
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ========== MODELLER ==========
 class SensorData(BaseModel):
