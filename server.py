@@ -1,7 +1,7 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 import mysql.connector
 from mysql.connector import Error
 
@@ -59,6 +59,27 @@ def insert_sensor_data(data: SensorData):
         if connection.is_connected():
             connection.close()
 
+def fetch_sensor_data():
+    try:
+        connection = mysql.connector.connect(**dbconfig.db_config)
+        cursor = connection.cursor(dictionary=True)  # dictionary=True -> sonuçları dict olarak alıyoruz
+
+        select_query = "SELECT * FROM sensor_data ORDER BY timestamp DESC LIMIT 180;"
+        cursor.execute(select_query)
+        records = cursor.fetchall()
+
+        return records
+
+    except Error as e:
+        print(f"Error while reading data: {e}")
+        raise HTTPException(status_code=500, detail="Database reading failed")
+
+    finally:
+        if cursor:
+            cursor.close()
+        if connection.is_connected():
+            connection.close()
+
 @app.post("/arduino-data")
 async def receive_data(data: SensorData):
    
@@ -69,3 +90,9 @@ async def receive_data(data: SensorData):
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
     return response
+
+@app.get("/arduino-data", response_model=List[SensorData])
+async def get_data():
+    records = fetch_sensor_data()
+    return records
+#get methods
