@@ -1,9 +1,11 @@
 from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 from datetime import datetime
 
+import auth
 from database import SessionLocal, engine
 import models, schemas
 
@@ -79,17 +81,55 @@ async def get_stats(metric: str, start: datetime, end: datetime, db: Session = D
         "stddev": result[3]
     }
 
-@app.get(f"{api_prefix}/settings", response_model=schemas.UserSettings)
-async def get_settings():
-    return schemas.UserSettings(
-        notifications=True,
-        format="metric",
-        thresholds={"co2": 1000, "pm25": 35, "pm10": 50, "voc": 500}
-    )
+# @app.get(f"{api_prefix}/settings", response_model=schemas.UserSettings)
+# async def get_settings():
+#     return schemas.UserSettings(
+#         notifications=True,
+#         format="metric",
+#         thresholds={"co2": 1000, "pm25": 35, "pm10": 50, "voc": 500}
+#     )
 
-@app.post(f"{api_prefix}/settings")
-async def update_settings(settings: schemas.UserSettings):
-    return {"message": "Settings updated", "settings": settings}
+# GET: Kullanıcının kendi ayarlarını getir
+@app.get(f"{api_prefix}/settings", response_model=schemas.UserSettings)
+def get_user_settings(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    settings = db.query(models.UserSettings).filter(models.UserSettings.user_id == current_user.id).first()
+    if not settings:
+        # Kullanıcının hiç ayarı yoksa varsayılan oluştur
+        settings = models.UserSettings(
+            user_id=current_user.id,
+            notifications=True,
+            format="metric",
+            thresholds={"co2": 1000, "pm25": 35, "pm10": 50, "voc": 500}
+        )
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return settings
+
+# @app.post(f"{api_prefix}/settings")
+# async def update_settings(settings: schemas.UserSettings):
+#     return {"message": "Settings updated", "settings": settings}
+
+# POST: Kullanıcının kendi ayarlarını güncelle
+@app.post(f"{api_prefix}/settings", response_model=schemas.UserSettings)
+def update_user_settings(
+    updated_settings: schemas.UserSettingsCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    settings = db.query(models.UserSettings).filter(models.UserSettings.user_id == current_user.id).first()
+    if not settings:
+        settings = models.UserSettings(user_id=current_user.id, **updated_settings.dict())
+        db.add(settings)
+    else:
+        for key, value in updated_settings.dict().items():
+            setattr(settings, key, value)
+    db.commit()
+    db.refresh(settings)
+    return settings
 
 @app.get(f"{api_prefix}/alerts/recent", response_model=List[schemas.Alert])
 async def get_recent_alerts():
@@ -97,3 +137,30 @@ async def get_recent_alerts():
         schemas.Alert(id=1, timestamp=datetime.now().isoformat(), type="co2", value=1200, threshold=1000),
         schemas.Alert(id=2, timestamp=datetime.now().isoformat(), type="pm25", value=50, threshold=35),
     ]
+
+#USER AUTHENTICATION
+@app.post("/auth/register", response_model=schemas.UserOut)
+def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    existing_user = auth.get_user_by_email(db, user.email)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    hashed_pw = auth.get_password_hash(user.password)
+    db_user = models.User(email=user.email, hashed_password=hashed_pw)
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@app.post("/auth/login", response_model=schemas.Token)
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = auth.authenticate_user(db, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+    access_token = auth.create_access_token(data={"sub": user.email})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/auth/me", response_model=schemas.UserOut)
+def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
+    return current_user
