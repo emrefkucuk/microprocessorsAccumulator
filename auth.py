@@ -6,9 +6,10 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 import models, schemas
 from database import SessionLocal
-
+import os
+from dotenv import load_dotenv
 # Config
-SECRET_KEY = "supersecret"  # GÜVENLİK için .env'den al
+SECRET_KEY = os.getenv("SECRET_KEY")  # GÜVENLİK için .env'den al
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
