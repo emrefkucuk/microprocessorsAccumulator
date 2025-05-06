@@ -10,8 +10,18 @@ class SensorData(BaseModel):
     pm10: float
     co2: float
     voc: float
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
+    # latitude: Optional[float] = None
+    # longitude: Optional[float] = None
+
+class PartialSensorData(BaseModel):
+    timestamp: datetime
+    temperature: float
+    humidity: float
+    pm25: float
+    pm10: float
+
+    class Config:
+        from_attributes = True
 
 class UserSettings(BaseModel):
     notifications: bool

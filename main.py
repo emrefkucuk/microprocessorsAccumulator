@@ -52,6 +52,22 @@ async def get_data(
     records = query.all()
     return records
 
+@app.get("/api/sensors/summary", response_model=List[schemas.PartialSensorData])
+def get_sensor_summary(db: Session = Depends(get_db)):
+    data = (
+        db.query(
+            models.ArduinoData.timestamp,
+            models.ArduinoData.temperature,
+            models.ArduinoData.humidity,
+            models.ArduinoData.pm25,
+            models.ArduinoData.pm10
+        )
+        .order_by(models.ArduinoData.timestamp.desc())
+        .limit(10)
+        .all()
+    )
+    return data
+
 @app.get(f"{api_prefix}/sensors/current", response_model=schemas.SensorData)
 async def get_current_data(db: Session = Depends(get_db)):
     record = db.query(models.ArduinoData).order_by(models.ArduinoData.timestamp.desc()).first()

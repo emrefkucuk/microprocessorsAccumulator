@@ -17,8 +17,8 @@ class ArduinoData(Base):
     pm10 = Column(Float, nullable=False)  # PM10
     co2 = Column(Float, nullable=False)  # CO2
     voc = Column(Float, nullable=False)  # VOC (Volatil Organik Bileşikler)
-    latitude = Column(Float, nullable=True)  # Enlem (isteğe bağlı)
-    longitude = Column(Float, nullable=True)  # Boylam (isteğe bağlı)
+    # latitude = Column(Float, nullable=True)  # Enlem (isteğe bağlı)
+    # longitude = Column(Float, nullable=True)  # Boylam (isteğe bağlı)
 
 class User(Base):
     __tablename__ = 'users'
