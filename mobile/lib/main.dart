@@ -42,15 +42,10 @@ class AirQualityApp extends StatelessWidget {
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8.0),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.0)),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8.0),
-            borderSide: const BorderSide(
-              color: Colors.purple,
-              width: 2.0,
-            ),
+            borderSide: const BorderSide(color: Colors.purple, width: 2.0),
           ),
         ),
       ),
