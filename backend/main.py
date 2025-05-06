@@ -67,20 +67,30 @@ async def get_data(
     return records
 
 
-@app.get("/api/sensors/summary", response_model=List[schemas.PartialSensorData])
-def get_sensor_summary(db: Session = Depends(get_db)):
-    data = (
-        db.query(
-            models.ArduinoData.timestamp,
-            models.ArduinoData.temperature,
-            models.ArduinoData.humidity,
-            models.ArduinoData.pm25,
-            models.ArduinoData.pm10
-        )
-        .order_by(models.ArduinoData.timestamp.desc())
-        .limit(10)
-        .all()
+
+
+@app.get(f"{api_prefix}/sensors/summary", response_model=List[schemas.PartialSensorData])
+def get_sensor_summary(
+    start_time: Optional[datetime] = Query(None),
+    end_time: Optional[datetime] = Query(None),
+    db: Session = Depends(get_db)
+):
+    query = db.query(
+        models.ArduinoData.timestamp,
+        models.ArduinoData.temperature,
+        models.ArduinoData.humidity,
+        models.ArduinoData.pm25,
+        models.ArduinoData.pm10
     )
+
+    # if start_time:
+    #     query = query.filter(models.ArduinoData.timestamp >= start_time)
+    # if end_time:
+    #     query = query.filter(models.ArduinoData.timestamp <= end_time)
+    if start_time and end_time:
+        query = query.filter(models.ArduinoData.timestamp.between(start_time, end_time))
+
+    data = query.order_by(models.ArduinoData.timestamp.desc())
     return data
 
 @app.get(f"{api_prefix}/sensors/current", response_model=schemas.SensorData)
@@ -112,14 +122,6 @@ async def get_stats(metric: str, start: datetime, end: datetime, db: Session = D
         "stddev": result[3]
     }
 
-# @app.get(f"{api_prefix}/settings", response_model=schemas.UserSettings)
-# async def get_settings():
-#     return schemas.UserSettings(
-#         notifications=True,
-#         format="metric",
-#         thresholds={"co2": 1000, "pm25": 35, "pm10": 50, "voc": 500}
-#     )
-
 # GET: Kullanıcının kendi ayarlarını getir
 @app.get(f"{api_prefix}/settings", response_model=schemas.UserSettings)
 def get_user_settings(
@@ -140,9 +142,7 @@ def get_user_settings(
         db.refresh(settings)
     return settings
 
-# @app.post(f"{api_prefix}/settings")
-# async def update_settings(settings: schemas.UserSettings):
-#     return {"message": "Settings updated", "settings": settings}
+
 
 # POST: Kullanıcının kendi ayarlarını güncelle
 @app.post(f"{api_prefix}/settings", response_model=schemas.UserSettings)
