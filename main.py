@@ -40,17 +40,32 @@ async def receive_data(data: schemas.SensorData, db: Session = Depends(get_db)):
     db.commit()
     return {"success": True, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
+# @app.get(f"{api_prefix}/sensors/history", response_model=List[schemas.SensorData])
+# async def get_data(
+#     start: Optional[datetime] = Query(None),
+#     end: Optional[datetime] = Query(None),
+#     db: Session = Depends(get_db)
+# ):
+#     query = db.query(models.ArduinoData).order_by(models.ArduinoData.timestamp.desc()).limit(180)
+#     if start and end:
+#         query = query.filter(models.ArduinoData.timestamp.between(start, end))
+#     records = query.all()
+#     return records
 @app.get(f"{api_prefix}/sensors/history", response_model=List[schemas.SensorData])
 async def get_data(
     start: Optional[datetime] = Query(None),
     end: Optional[datetime] = Query(None),
     db: Session = Depends(get_db)
 ):
-    query = db.query(models.ArduinoData).order_by(models.ArduinoData.timestamp.desc()).limit(180)
+    query = db.query(models.ArduinoData).order_by(models.ArduinoData.timestamp.desc())
+
     if start and end:
         query = query.filter(models.ArduinoData.timestamp.between(start, end))
+
+    query = query.limit(180)
     records = query.all()
     return records
+
 
 @app.get("/api/sensors/summary", response_model=List[schemas.PartialSensorData])
 def get_sensor_summary(db: Session = Depends(get_db)):
