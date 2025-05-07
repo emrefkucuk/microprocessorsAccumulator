@@ -5,9 +5,10 @@ import InfoTooltip from './InfoTooltip';
 
 interface AQIIndicatorProps {
   value: number;
+  timestamp?: Date | string | null;
 }
 
-const AQIIndicator: React.FC<AQIIndicatorProps> = ({ value }) => {
+const AQIIndicator: React.FC<AQIIndicatorProps> = ({ value, timestamp }) => {
   const { t } = useTranslation();
 
   const getAQIColor = (aqi: number) => {
@@ -38,9 +39,10 @@ const AQIIndicator: React.FC<AQIIndicatorProps> = ({ value }) => {
             <div className="flex items-center gap-1">
               <h2 className="card-title text-lg">{t('aqi.title')}</h2>
               <InfoTooltip
-                title="Hava Kalitesi İndeksi (AQI)"
-                description="Hava kalitesinin genel durumunu gösteren bir indeks. Düşük değerler daha iyi hava kalitesini gösterir."
+                title={t('aqi.title')}
+                description={t('aqi.description')}
                 optimalRange="0-50"
+                timestamp={timestamp}
               />
             </div>
           </div>

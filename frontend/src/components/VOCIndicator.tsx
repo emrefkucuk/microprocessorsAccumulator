@@ -5,9 +5,10 @@ import InfoTooltip from './InfoTooltip';
 
 interface VOCIndicatorProps {
   value: number;
+  timestamp?: Date | string | null;
 }
 
-const VOCIndicator: React.FC<VOCIndicatorProps> = ({ value }) => {
+const VOCIndicator: React.FC<VOCIndicatorProps> = ({ value, timestamp }) => {
   const { t } = useTranslation();
 
   return (
@@ -21,15 +22,16 @@ const VOCIndicator: React.FC<VOCIndicatorProps> = ({ value }) => {
               <InfoTooltip
                 title="Uçucu Organik Bileşikler (VOC)"
                 description="Havada bulunan organik kimyasal maddeler. Yüksek seviyeler baş ağrısı, mide bulantısı ve göz tahrişine neden olabilir."
-                optimalRange="0-500 ppb"
+                optimalRange="0-3 ppm"
+                timestamp={timestamp}
               />
             </div>
           </div>
-          <div className="text-2xl font-bold">{Math.round(value)} ppb</div>
+          <div className="text-2xl font-bold">{value.toFixed(2)} ppm</div>
         </div>
       </div>
     </div>
   );
 };
 
-export default VOCIndicator; 
+export default VOCIndicator;

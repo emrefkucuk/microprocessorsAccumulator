@@ -4,6 +4,7 @@
   "analytics": "Analytics",
   "settings": "Settings",
   "logout": "Log Out",
+  "lastUpdated": "Last Updated",
   "settingsPage": {
     "title": "Settings",
     "notifications": {
@@ -37,7 +38,8 @@
     "register": "Register",
     "noAccount": "Don't have an account?",
     "invalidCredentials": "Invalid email or password",
-    "loggingIn": "Signing in..."
+    "loggingIn": "Signing in...",
+    "continueWithoutLogin": "Continue without Login"
   },
   "register": {
     "title": "Create a New Account",
@@ -51,7 +53,8 @@
     "invalidEmail": "Please enter a valid email address",
     "passwordTooShort": "Password must be at least 6 characters",
     "registrationFailed": "Registration failed. Please try again.",
-    "registering": "Creating account..."
+    "registering": "Creating account...",
+    "continueWithoutRegister": "Continue without Registration"
   },
   "sensors": {
     "temperature": "Temperature",
@@ -59,7 +62,10 @@
     "co2": "CO₂ Level",
     "pm25": "PM2.5",
     "pm10": "PM10",
-    "voc": "VOC"
+    "voc": "VOC",
+    "increasing": "Increasing",
+    "decreasing": "Decreasing",
+    "stable": "Stable"
   },
   "units": {
     "temperature": "°C",
@@ -95,8 +101,10 @@
   "predictions": {
     "title": "Prediction",
     "date": "Date",
+    "time": "Time",
     "temperature": "Temperature",
-    "humidity": "Humidity"
+    "humidity": "Humidity",
+    "last7Hours": "Last 7 Hours"
   },
   "aqi": {
     "title": "Air Quality Index",
@@ -110,6 +118,7 @@
     }
   },
   "trend": {
-    "title": "24-Hour Trend"
+    "title": "24-Hour Trend",
+    "legendHelp": "Click on labels to show or hide values"
   }
 }

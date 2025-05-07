@@ -21,7 +21,7 @@ import { tr, enUS } from 'date-fns/locale';
 import { Download, FileText, FileDown, RefreshCw } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import { fetchWithAuth } from '../lib/api';
+import { analyticsApi } from '../lib/analyticsApi';
 
 // Mock veri oluşturma fonksiyonu - API başarısız olursa fallback olarak kullanılacak
 const generateMockData = (days: number) => {
@@ -62,21 +62,16 @@ const Analytics = () => {
         const end = new Date();
         const start = subDays(end, Number(dateRange) - 1);
         
-        // Format dates in ISO format for the API
-        const formattedStart = start.toISOString().split('T')[0] + 'T00:00:00';
-        const formattedEnd = end.toISOString().split('T')[0] + 'T23:59:59';
+        // Format dates in ISO format for the API with Turkish time (UTC+3)
+        const turkishOffset = 3 * 60 * 60 * 1000; // UTC+3 için 3 saat
+        const turkishStartDate = new Date(start.getTime() + turkishOffset);
+        const turkishEndDate = new Date(end.getTime() + turkishOffset);
+        
+        const formattedStart = turkishStartDate.toISOString().split('T')[0] + 'T00:00:00';
+        const formattedEnd = turkishEndDate.toISOString().split('T')[0] + 'T23:59:59';
         
         // Fetch historical data from API
-        const response = await fetchWithAuth(
-          `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/sensors/history?` + 
-          `start=${formattedStart}&end=${formattedEnd}`
-        );
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch historical data');
-        }
-        
-        let apiData = await response.json();
+        const apiData = await analyticsApi.getAnalyticsData(formattedStart, formattedEnd);
         
         // Format and process the data
         const formattedData = apiData.map(item => ({
@@ -170,27 +165,17 @@ const Analytics = () => {
       const end = new Date();
       const start = subDays(end, Number(dateRange) - 1);
       
-      // Format dates in ISO format for the API
-      const formattedStart = start.toISOString().split('T')[0] + 'T00:00:00';
-      const formattedEnd = end.toISOString().split('T')[0] + 'T23:59:59';
+      // Format dates in ISO format for the API with Turkish time (UTC+3)
+      const turkishOffset = 3 * 60 * 60 * 1000; // UTC+3 için 3 saat
+      const turkishStartDate = new Date(start.getTime() + turkishOffset);
+      const turkishEndDate = new Date(end.getTime() + turkishOffset);
       
-      const response = await fetchWithAuth(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/stats?` + 
-        `metric=${metricId}&start=${formattedStart}&end=${formattedEnd}`
-      );
+      const formattedStart = turkishStartDate.toISOString().split('T')[0] + 'T00:00:00';
+      const formattedEnd = turkishEndDate.toISOString().split('T')[0] + 'T23:59:59';
       
-      if (!response.ok) {
-        throw new Error(`Failed to fetch stats for ${metricId}`);
-      }
+      const statsData = await analyticsApi.getMetricStats(metricId, formattedStart, formattedEnd);
       
-      const statsData = await response.json();
-      
-      return {
-        min: Number(statsData.min).toFixed(1),
-        max: Number(statsData.max).toFixed(1),
-        avg: Number(statsData.avg).toFixed(1),
-        std: Number(statsData.stddev).toFixed(1)
-      };
+      return analyticsApi.formatStats(statsData);
     } catch (err) {
       console.error(`Error fetching stats for ${metricId}:`, err);
       // Fall back to calculated stats from the current data set

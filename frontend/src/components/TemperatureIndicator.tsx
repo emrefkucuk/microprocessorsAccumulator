@@ -5,10 +5,11 @@ import InfoTooltip from './InfoTooltip';
 
 interface TemperatureIndicatorProps {
   value: number;
-  trend?: number;
+  trend: number;
+  timestamp?: Date | string | null;
 }
 
-const TemperatureIndicator: React.FC<TemperatureIndicatorProps> = ({ value, trend }) => {
+const TemperatureIndicator: React.FC<TemperatureIndicatorProps> = ({ value, trend, timestamp }) => {
   const { t } = useTranslation();
 
   return (
@@ -23,21 +24,26 @@ const TemperatureIndicator: React.FC<TemperatureIndicatorProps> = ({ value, tren
                 title="Sıcaklık"
                 description="Ortam sıcaklığı. Yüksek sıcaklıklar rahatsızlık ve sağlık sorunlarına yol açabilir."
                 optimalRange="20-25°C"
+                timestamp={timestamp}
               />
             </h2>
           </div>
-          {trend && (
-            <div className={`text-xs ${trend > 0 ? 'text-error' : 'text-success'}`}>
-              {trend > 0 ? '↑' : '↓'} {Math.abs(trend)}%
-            </div>
-          )}
+          <div className="text-2xl font-bold">{value.toFixed(1)}°C</div>
         </div>
-        <div className="text-2xl font-bold mt-1">
-          {value.toFixed(1)} <span className="text-sm font-normal opacity-70">{t('units.temperature')}</span>
+        <div className="mt-2">
+          <div className={`text-sm ${trend > 0 ? 'text-error' : trend < 0 ? 'text-info' : 'text-base-content'}`}>
+            {trend > 0 ? (
+              <span>↑ {t('sensors.increasing')}</span>
+            ) : trend < 0 ? (
+              <span>↓ {t('sensors.decreasing')}</span>
+            ) : (
+              <span>→ {t('sensors.stable')}</span>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-export default TemperatureIndicator; 
+export default TemperatureIndicator;

@@ -9,7 +9,7 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { useAuth } from './hooks/useAuth';
-import { LogOut } from 'lucide-react';
+import { LogOut, LogIn, UserPlus } from 'lucide-react';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -29,10 +29,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-const NavbarWithLogout = () => {
+const Navbar = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { logout, user } = useAuth();
+  const { logout, isAuthenticated } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -45,29 +45,36 @@ const NavbarWithLogout = () => {
         <h1 className="text-xl font-semibold">{t('airQualityStation')}</h1>
       </div>
       <div className="flex-none gap-2">
-        {user && (
-          <div className="dropdown dropdown-end">
-            <label tabIndex={0} className="btn btn-ghost btn-circle avatar placeholder">
-              <div className="bg-neutral-focus text-neutral-content rounded-full w-10">
-                <span>{user.email.charAt(0).toUpperCase()}</span>
-              </div>
-            </label>
-            <ul tabIndex={0} className="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
-              <li className="menu-title">
-                <span>{user.email}</span>
-              </li>
-              <li><a onClick={handleLogout}>{t('logout')}</a></li>
-            </ul>
-          </div>
-        )}
         <ThemeToggle />
-        <button 
-          onClick={handleLogout}
-          className="btn btn-ghost btn-circle"
-          title={t('logout')}
-        >
-          <LogOut className="h-5 w-5" />
-        </button>
+        
+        {isAuthenticated ? (
+          // Giriş yapmış kullanıcı için çıkış butonu
+          <button 
+            onClick={handleLogout}
+            className="btn btn-ghost btn-circle"
+            title={t('logout')}
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
+        ) : (
+          // Giriş yapmamış kullanıcı için giriş/kayıt butonları
+          <>
+            <button 
+              onClick={() => navigate('/login')}
+              className="btn btn-ghost btn-circle"
+              title={t('login.submit')}
+            >
+              <LogIn className="h-5 w-5" />
+            </button>
+            <button 
+              onClick={() => navigate('/register')}
+              className="btn btn-ghost btn-circle"
+              title={t('register.submit')}
+            >
+              <UserPlus className="h-5 w-5" />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -78,7 +85,7 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => {
     <div className="flex min-h-screen bg-base-100">
       <Sidebar />
       <div className="flex-1">
-        <NavbarWithLogout />
+        <Navbar />
         <main className="container mx-auto">
           {children}
         </main>
@@ -101,26 +108,25 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />} />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
         <Route path="/register" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />} />
         
+        {/* Dashboard artık korumalı değil, herkes erişebilir */}
         <Route path="/dashboard" element={
-          <ProtectedRoute>
-            <MainLayout>
-              <Dashboard />
-            </MainLayout>
-          </ProtectedRoute>
+          <MainLayout>
+            <Dashboard />
+          </MainLayout>
         } />
         
+        {/* Analytics artık korumalı değil, herkes erişebilir */}
         <Route path="/analytics" element={
-          <ProtectedRoute>
-            <MainLayout>
-              <Analytics />
-            </MainLayout>
-          </ProtectedRoute>
+          <MainLayout>
+            <Analytics />
+          </MainLayout>
         } />
         
+        {/* Settings hala korumalı */}
         <Route path="/settings" element={
           <ProtectedRoute>
             <MainLayout>

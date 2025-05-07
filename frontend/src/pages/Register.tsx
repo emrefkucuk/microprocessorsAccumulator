@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Lock, Mail, UserPlus } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import ThemeToggle from '../components/ThemeToggle';
 
 const Register = () => {
   const { t } = useTranslation();
@@ -74,6 +75,9 @@ const Register = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 via-cyan-100 to-blue-100 animate-gradient">
       <div className="absolute inset-0 bg-[url('/src/assets/air-pattern.svg')] opacity-10"></div>
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-md p-8 space-y-8 bg-white/90 backdrop-blur-sm rounded-xl shadow-2xl relative z-10">
         <div className="text-center">
           <div className="flex items-center justify-center mb-4">
@@ -83,7 +87,7 @@ const Register = () => {
               </svg>
             </div>
           </div>
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">Akümülatör</h1>
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">Accumulator</h1>
           <p className="text-lg text-gray-600 font-medium">{t('airQualityStation')}</p>
           <div className="mt-4">
             <p className="text-sm text-gray-500">{t('register.title')}</p>
@@ -160,6 +164,14 @@ const Register = () => {
                 {t('register.submit')}
               </>
             )}
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard')}
+            className="w-full mt-3 flex justify-center py-3 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+          >
+            {t('register.continueWithoutRegister')}
           </button>
           
           <div className="text-center mt-4">

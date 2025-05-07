@@ -5,9 +5,10 @@ import InfoTooltip from './InfoTooltip';
 
 interface PM10IndicatorProps {
   value: number;
+  timestamp?: Date | string | null;
 }
 
-const PM10Indicator: React.FC<PM10IndicatorProps> = ({ value }) => {
+const PM10Indicator: React.FC<PM10IndicatorProps> = ({ value, timestamp }) => {
   const { t } = useTranslation();
 
   return (
@@ -21,7 +22,8 @@ const PM10Indicator: React.FC<PM10IndicatorProps> = ({ value }) => {
               <InfoTooltip
                 title="PM10"
                 description="10 mikrometreden küçük partikül madde. Solunum yollarını etkileyebilir ve alerjik reaksiyonlara neden olabilir."
-                optimalRange="0-20 μg/m³"
+                optimalRange="0-150 μg/m³"
+                timestamp={timestamp}
               />
             </div>
           </div>
@@ -32,4 +34,4 @@ const PM10Indicator: React.FC<PM10IndicatorProps> = ({ value }) => {
   );
 };
 
-export default PM10Indicator; 
+export default PM10Indicator;

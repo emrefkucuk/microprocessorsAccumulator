@@ -4,6 +4,7 @@
   "analytics": "Analizler",
   "settings": "Ayarlar",
   "logout": "Çıkış Yap",
+  "lastUpdated": "Son Güncelleme",
   "settingsPage": {
     "title": "Ayarlar",
     "notifications": {
@@ -37,7 +38,8 @@
     "register": "Kayıt Ol",
     "noAccount": "Hesabınız yok mu?",
     "invalidCredentials": "Geçersiz e-posta veya şifre",
-    "loggingIn": "Giriş yapılıyor..."
+    "loggingIn": "Giriş yapılıyor...",
+    "continueWithoutLogin": "Giriş Yapmadan Devam Et"
   },
   "register": {
     "title": "Yeni Hesap Oluştur",
@@ -51,7 +53,8 @@
     "invalidEmail": "Lütfen geçerli bir e-posta adresi girin",
     "passwordTooShort": "Şifre en az 6 karakter olmalıdır",
     "registrationFailed": "Kayıt başarısız oldu. Lütfen tekrar deneyin.",
-    "registering": "Hesap oluşturuluyor..."
+    "registering": "Hesap oluşturuluyor...",
+    "continueWithoutRegister": "Kayıt Olmadan Devam Et"
   },
   "sensors": {
     "temperature": "Sıcaklık",
@@ -59,7 +62,10 @@
     "co2": "CO₂ Seviyesi",
     "pm25": "PM2.5",
     "pm10": "PM10",
-    "voc": "VOC"
+    "voc": "VOC",
+    "increasing": "Yükseliyor",
+    "decreasing": "Düşüyor",
+    "stable": "Sabit"
   },
   "units": {
     "temperature": "°C",
@@ -95,8 +101,10 @@
   "predictions": {
     "title": "Tahmin",
     "date": "Tarih",
+    "time": "Saat",
     "temperature": "Sıcaklık",
-    "humidity": "Nem"
+    "humidity": "Nem",
+    "last7Hours": "Son 7 Saat"
   },
   "aqi": {
     "title": "Hava Kalitesi İndeksi",
@@ -110,6 +118,7 @@
     }
   },
   "trend": {
-    "title": "24 Saatlik Trend"
+    "title": "24 Saatlik Trend",
+    "legendHelp": "Değerleri göstermek veya gizlemek için etiketlere tıklayın"
   }
 }

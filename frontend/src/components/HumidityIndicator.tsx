@@ -5,10 +5,11 @@ import InfoTooltip from './InfoTooltip';
 
 interface HumidityIndicatorProps {
   value: number;
-  trend?: number;
+  trend: number;
+  timestamp?: Date | string | null;
 }
 
-const HumidityIndicator: React.FC<HumidityIndicatorProps> = ({ value, trend }) => {
+const HumidityIndicator: React.FC<HumidityIndicatorProps> = ({ value, trend, timestamp }) => {
   const { t } = useTranslation();
 
   return (
@@ -23,21 +24,26 @@ const HumidityIndicator: React.FC<HumidityIndicatorProps> = ({ value, trend }) =
                 title="Nem"
                 description="Havadaki nem oranı. Düşük nem cilt kuruluğuna, yüksek nem küf ve bakteri üremesine neden olabilir."
                 optimalRange="40-60%"
+                timestamp={timestamp}
               />
             </h2>
           </div>
-          {trend && (
-            <div className={`text-xs ${trend > 0 ? 'text-error' : 'text-success'}`}>
-              {trend > 0 ? '↑' : '↓'} {Math.abs(trend)}%
-            </div>
-          )}
+          <div className="text-2xl font-bold">{Math.round(value)}%</div>
         </div>
-        <div className="text-2xl font-bold mt-1">
-          {value.toFixed(1)} <span className="text-sm font-normal opacity-70">{t('units.humidity')}</span>
+        <div className="mt-2">
+          <div className={`text-sm ${trend > 0 ? 'text-info' : trend < 0 ? 'text-warning' : 'text-base-content'}`}>
+            {trend > 0 ? (
+              <span>↑ {t('sensors.increasing')}</span>
+            ) : trend < 0 ? (
+              <span>↓ {t('sensors.decreasing')}</span>
+            ) : (
+              <span>→ {t('sensors.stable')}</span>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-export default HumidityIndicator; 
+export default HumidityIndicator;

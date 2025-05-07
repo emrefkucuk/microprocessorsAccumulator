@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, BellOff, Save, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { fetchWithAuth } from '../lib/api';
+import { settingsApi } from '../lib/settingsApi';
 import { UserSettings } from '../types';
 
 const Settings = () => {
@@ -27,13 +27,7 @@ const Settings = () => {
     const fetchSettings = async () => {
       try {
         setLoading(true);
-        const response = await fetchWithAuth(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/settings`);
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch settings');
-        }
-        
-        const data = await response.json();
+        const data = await settingsApi.getSettings();
         setSettings(data);
       } catch (err) {
         console.error('Error fetching settings:', err);
@@ -53,23 +47,12 @@ const Settings = () => {
       setError(null);
       setSuccess(null);
       
-      const response = await fetchWithAuth(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/settings`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          notifications: settings.notifications,
-          format: settings.format,
-          thresholds: settings.thresholds,
-        }),
+      const updatedSettings = await settingsApi.updateSettings({
+        notifications: settings.notifications,
+        format: settings.format,
+        thresholds: settings.thresholds,
       });
       
-      if (!response.ok) {
-        throw new Error('Failed to save settings');
-      }
-      
-      const updatedSettings = await response.json();
       setSettings(updatedSettings);
       setSuccess('Settings saved successfully');
       

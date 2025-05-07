@@ -5,9 +5,10 @@ import InfoTooltip from './InfoTooltip';
 
 interface PM25IndicatorProps {
   value: number;
+  timestamp?: Date | string | null;
 }
 
-const PM25Indicator: React.FC<PM25IndicatorProps> = ({ value }) => {
+const PM25Indicator: React.FC<PM25IndicatorProps> = ({ value, timestamp }) => {
   const { t } = useTranslation();
 
   return (
@@ -21,7 +22,8 @@ const PM25Indicator: React.FC<PM25IndicatorProps> = ({ value }) => {
               <InfoTooltip
                 title="PM2.5"
                 description="2.5 mikrometreden küçük partikül madde. Akciğerlere derinlemesine nüfuz edebilir ve solunum sorunlarına yol açabilir."
-                optimalRange="0-12 μg/m³"
+                optimalRange="0-35 μg/m³"
+                timestamp={timestamp}
               />
             </div>
           </div>
@@ -32,4 +34,4 @@ const PM25Indicator: React.FC<PM25IndicatorProps> = ({ value }) => {
   );
 };
 
-export default PM25Indicator; 
+export default PM25Indicator;

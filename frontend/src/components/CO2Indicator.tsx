@@ -5,9 +5,10 @@ import InfoTooltip from './InfoTooltip';
 
 interface CO2IndicatorProps {
   value: number;
+  timestamp?: Date | string | null;
 }
 
-const CO2Indicator: React.FC<CO2IndicatorProps> = ({ value }) => {
+const CO2Indicator: React.FC<CO2IndicatorProps> = ({ value, timestamp }) => {
   const { t } = useTranslation();
 
   return (
@@ -22,6 +23,7 @@ const CO2Indicator: React.FC<CO2IndicatorProps> = ({ value }) => {
                 title="Karbondioksit (CO₂)"
                 description="Havadaki karbondioksit konsantrasyonu. Yüksek seviyeler baş ağrısı, yorgunluk ve konsantrasyon sorunlarına yol açabilir."
                 optimalRange="400-800 ppm"
+                timestamp={timestamp}
               />
             </div>
           </div>
@@ -32,4 +34,4 @@ const CO2Indicator: React.FC<CO2IndicatorProps> = ({ value }) => {
   );
 };
 
-export default CO2Indicator; 
+export default CO2Indicator;
