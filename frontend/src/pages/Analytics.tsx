@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import {
   LineChart,
   Line,
-  BarChart,
-  Bar,
+  // BarChart,
+  // Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -18,8 +18,9 @@ import {
 } from 'recharts';
 import { format, subDays, eachDayOfInterval, parseISO } from 'date-fns';
 import { tr, enUS } from 'date-fns/locale';
-import { Download, FileText, FileDown, RefreshCw } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { /* Download, */ FileText, FileDown, RefreshCw } from 'lucide-react';
+// html2canvas'ı html2canvas-pro ile değiştiriyoruz
+import html2canvas from 'html2canvas-pro';
 import { jsPDF } from 'jspdf';
 import { analyticsApi } from '../lib/analyticsApi';
 
@@ -132,32 +133,26 @@ const Analytics = () => {
         // Remove the dateObj property as it's no longer needed
         averagedData = averagedData.map(({ dateObj, ...rest }) => rest);
         
-        // If we have data, use it, otherwise fall back to mock data
+        // If we have data, use it, otherwise do not use mock data
         if (averagedData.length > 0) {
           setData(averagedData);
         } else {
-          console.log("No data returned from API, using mock data");
-          // Generate and sort mock data
-          const mockData = generateMockData(Number(dateRange));
-          mockData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-          setData(mockData);
-          setError("No data available for the selected date range. Showing simulated data.");
+          console.log("No data returned from API");
+          setData([]);
+          setError(t('errors.noDataAvailable'));
         }
         
       } catch (err) {
         console.error("Error fetching analytics data:", err);
-        setError("Failed to load data. Showing simulated data.");
-        // Generate and sort mock data
-        const mockData = generateMockData(Number(dateRange));
-        mockData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        setData(mockData);
+        setError(t('errors.dataLoadFailed'));
+        setData([]);
       } finally {
         setLoading(false);
       }
     };
     
     fetchData();
-  }, [dateRange]);
+  }, [dateRange, t]);
 
   // Fetch statistics from API for selected metrics
   const fetchStats = async (metricId: string) => {
@@ -248,37 +243,72 @@ const Analytics = () => {
   const downloadPDF = async () => {
     if (!chartRef.current) return;
 
-    const canvas = await html2canvas(chartRef.current, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff'
-    });
+    try {
+      // Grafik alanını kopyalayıp arkaplan rengini açıkça belirterek oklch sorununu önleme
+      const chartClone = chartRef.current.cloneNode(true) as HTMLElement;
+      const container = document.createElement('div');
+      container.style.position = 'absolute';
+      container.style.top = '-9999px';
+      container.style.left = '-9999px';
+      container.style.width = chartRef.current.clientWidth + 'px';
+      container.style.height = chartRef.current.clientHeight + 'px';
+      container.style.backgroundColor = '#ffffff'; // Açık arkaplan rengi
+      container.appendChild(chartClone);
+      document.body.appendChild(container);
 
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgWidth = 210;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      // Modern renk formatlarını desteklemeyen html2canvas ayarları
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        // Renk fonksiyonları için özel ayarlar
+        onclone: (_document, element) => {
+          // Tüm elementlere geleneksel renk değerleri atama
+          const elements = element.querySelectorAll('*');
+          elements.forEach(el => {
+            if (el instanceof HTMLElement) {
+              // Tema renklerini saf renklerle değiştirme
+              el.style.backgroundColor = window.getComputedStyle(el).backgroundColor;
+              el.style.color = window.getComputedStyle(el).color;
+              el.style.borderColor = window.getComputedStyle(el).borderColor;
+            }
+          });
+        }
+      });
 
-    // İstatistikleri ekle
-    pdf.setFontSize(12);
-    let yPos = imgHeight + 10;
-    selectedMetrics.forEach(metricId => {
-      const metric = metrics.find(m => m.id === metricId)!;
-      const stats = metricStats[metricId] || calculateStats(metricId);
-      pdf.text(`${metric.name} (${metric.unit})`, 10, yPos);
-      yPos += 7;
-      pdf.text(`Minimum: ${stats.min}`, 15, yPos);
-      yPos += 7;
-      pdf.text(`Maximum: ${stats.max}`, 15, yPos);
-      yPos += 7;
-      pdf.text(`Average: ${stats.avg}`, 15, yPos);
-      yPos += 7;
-      pdf.text(`Standard Deviation: ${stats.std}`, 15, yPos);
-      yPos += 10;
-    });
+      // Temizlik
+      document.body.removeChild(container);
 
-    pdf.save(`air-quality-report-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+
+      // İstatistikleri ekle
+      pdf.setFontSize(12);
+      let yPos = imgHeight + 10;
+      selectedMetrics.forEach(metricId => {
+        const metric = metrics.find(m => m.id === metricId)!;
+        const stats = metricStats[metricId] || calculateStats(metricId);
+        pdf.text(`${metric.name} (${metric.unit})`, 10, yPos);
+        yPos += 7;
+        pdf.text(`Minimum: ${stats.min}`, 15, yPos);
+        yPos += 7;
+        pdf.text(`Maximum: ${stats.max}`, 15, yPos);
+        yPos += 7;
+        pdf.text(`Average: ${stats.avg}`, 15, yPos);
+        yPos += 7;
+        pdf.text(`Standard Deviation: ${stats.std}`, 15, yPos);
+        yPos += 10;
+      });
+
+      pdf.save(`air-quality-report-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    } catch (error) {
+      console.error("PDF oluşturma hatası:", error);
+      alert(t('errors.pdfGenerationFailed'));
+    }
   };
 
   const renderChart = () => {
@@ -359,7 +389,8 @@ const Analytics = () => {
                     dataKey={metric.id}
                     fill={metric.color}
                     name={`${metric.name} Points`}
-                    dot={{ r: 4 }}
+                    shape="circle"
+                    r={4}
                   />
                 </React.Fragment>
               );
@@ -369,6 +400,41 @@ const Analytics = () => {
       </ResponsiveContainer>
     );
   };
+
+  // Show loading spinner while loading data
+  if (loading && !data.length) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="loading loading-spinner loading-lg"></div>
+      </div>
+    );
+  }
+
+  // Show full-page error display when there's a critical error and no data
+  if (error && !data.length) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[80vh] p-6">
+        <div className="card bg-base-100 shadow-xl w-full max-w-2xl">
+          <div className="card-body text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 mx-auto text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <h2 className="text-2xl font-bold mt-4">{t('errors.dataLoadFailed')}</h2>
+            <p className="text-lg opacity-80 mt-2">{error}</p>
+            <p className="text-base opacity-60 mt-4">{t('errors.tryAgainMessage')}</p>
+            <div className="card-actions justify-center mt-6">
+              <button onClick={() => window.location.reload()} className="btn btn-primary btn-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {t('actions.refresh')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">

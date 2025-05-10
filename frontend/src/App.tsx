@@ -57,21 +57,21 @@ const Navbar = () => {
             <LogOut className="h-5 w-5" />
           </button>
         ) : (
-          // Giriş yapmamış kullanıcı için giriş/kayıt butonları
+          // Giriş yapmamış kullanıcı için giriş/kayıt butonları - yerlerini değiştirdim
           <>
-            <button 
-              onClick={() => navigate('/login')}
-              className="btn btn-ghost btn-circle"
-              title={t('login.submit')}
-            >
-              <LogIn className="h-5 w-5" />
-            </button>
             <button 
               onClick={() => navigate('/register')}
               className="btn btn-ghost btn-circle"
               title={t('register.submit')}
             >
               <UserPlus className="h-5 w-5" />
+            </button>
+            <button 
+              onClick={() => navigate('/login')}
+              className="btn btn-ghost btn-circle"
+              title={t('login.submit')}
+            >
+              <LogIn className="h-5 w-5" />
             </button>
           </>
         )}

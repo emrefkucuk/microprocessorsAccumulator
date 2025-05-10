@@ -31,14 +31,14 @@ const Settings = () => {
         setSettings(data);
       } catch (err) {
         console.error('Error fetching settings:', err);
-        setError('Failed to load settings. Using defaults.');
+        setError(t('settingsPage.loadError'));
       } finally {
         setLoading(false);
       }
     };
     
     fetchSettings();
-  }, []);
+  }, [t]);
 
   // Save settings to API
   const saveSettings = async () => {
@@ -54,13 +54,13 @@ const Settings = () => {
       });
       
       setSettings(updatedSettings);
-      setSuccess('Settings saved successfully');
+      setSuccess(t('settingsPage.saveSuccess'));
       
       // Clear success message after 3 seconds
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       console.error('Error saving settings:', err);
-      setError('Failed to save settings');
+      setError(t('settingsPage.saveError'));
     } finally {
       setSaving(false);
     }

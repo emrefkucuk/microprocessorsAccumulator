@@ -28,7 +28,10 @@
       "imperial": "Imperial (°F, ft³)"
     },
     "saveChanges": "Save Changes",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "saveSuccess": "Settings saved successfully",
+    "loadError": "Failed to load settings. Using defaults.",
+    "saveError": "Failed to save settings"
   },
   "login": {
     "title": "Log In to Your Account",
@@ -120,5 +123,15 @@
   "trend": {
     "title": "24-Hour Trend",
     "legendHelp": "Click on labels to show or hide values"
+  },
+  "errors": {
+    "dataLoadFailed": "Failed to load data",
+    "tryAgainMessage": "Please check your internet connection and try again",
+    "historicalDataFailed": "Failed to load historical sensor data",
+    "noDataAvailable": "No data available for the selected period",
+    "pdfGenerationFailed": "Failed to generate PDF report"
+  },
+  "actions": {
+    "refresh": "Refresh"
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import { format, subHours } from 'date-fns';
@@ -49,9 +49,11 @@ const Dashboard = () => {
         setLoading(true);
         const data = await sensorApi.getCurrentData();
         setCurrentData(data);
+        // Clear any previous errors when data loads successfully
+        setError(null);
       } catch (err) {
         console.error('Error fetching current sensor data:', err);
-        setError('Failed to load current sensor data');
+        setError(t('errors.dataLoadFailed'));
       } finally {
         setLoading(false);
       }
@@ -63,7 +65,7 @@ const Dashboard = () => {
     const intervalId = setInterval(fetchCurrentData, 30000);
     
     return () => clearInterval(intervalId);
-  }, []);
+  }, [t]); // Add t as a dependency to update when language changes
 
   // Fetch historical sensor data for the last 24 hours
   useEffect(() => {
@@ -98,14 +100,14 @@ const Dashboard = () => {
         setHistoricalData(sortedData);
       } catch (err) {
         console.error('Error fetching historical sensor data:', err);
-        setError('Failed to load historical sensor data');
+        setError(t('errors.historicalDataFailed'));
       } finally {
         setLoading(false);
       }
     };
     
     fetchHistoricalData();
-  }, []);
+  }, [t]); // Add t as a dependency to update when language changes
 
   // Fetch user settings - sadece giriş yapmış kullanıcılar için
   useEffect(() => {
@@ -226,15 +228,24 @@ const Dashboard = () => {
 
   if (error && !currentData && !historicalData.length) {
     return (
-      <div className="alert alert-error shadow-lg m-6">
-        <div>
-          <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span>{error}</span>
-        </div>
-        <div className="flex-none">
-          <button className="btn btn-sm" onClick={() => window.location.reload()}>Retry</button>
+      <div className="flex flex-col items-center justify-center min-h-[80vh] p-6">
+        <div className="card bg-base-100 shadow-xl w-full max-w-2xl">
+          <div className="card-body text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 mx-auto text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <h2 className="text-2xl font-bold mt-4">{t('errors.dataLoadFailed')}</h2>
+            <p className="text-lg opacity-80 mt-2">{error}</p>
+            <p className="text-base opacity-60 mt-4">{t('errors.tryAgainMessage')}</p>
+            <div className="card-actions justify-center mt-6">
+              <button onClick={() => window.location.reload()} className="btn btn-primary btn-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {t('actions.refresh')}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );

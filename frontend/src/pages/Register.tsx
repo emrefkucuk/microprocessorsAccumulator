@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Lock, Mail, UserPlus } from 'lucide-react';
+import { Lock, Mail, UserPlus, Globe, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import ThemeToggle from '../components/ThemeToggle';
 
 const Register = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { register, isAuthenticated, loading, error: authError } = useAuth();
   const [credentials, setCredentials] = useState({
@@ -16,6 +15,8 @@ const Register = () => {
   });
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Add an effect to redirect when authentication state changes
   useEffect(() => {
@@ -72,11 +73,23 @@ const Register = () => {
     }
   }, [authError]);
 
+  // Dil değiştirme fonksiyonu
+  const toggleLanguage = () => {
+    const newLang = i18n.language === 'en' ? 'tr' : 'en';
+    i18n.changeLanguage(newLang);
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 via-cyan-100 to-blue-100 animate-gradient">
       <div className="absolute inset-0 bg-[url('/src/assets/air-pattern.svg')] opacity-10"></div>
       <div className="absolute top-4 right-4">
-        <ThemeToggle />
+        <button 
+          onClick={toggleLanguage} 
+          className="btn btn-ghost btn-circle"
+          title={i18n.language === 'en' ? 'Türkçe\'ye geç' : 'Switch to English'}
+        >
+          <Globe className="h-5 w-5" />
+        </button>
       </div>
       <div className="w-full max-w-md p-8 space-y-8 bg-white/90 backdrop-blur-sm rounded-xl shadow-2xl relative z-10">
         <div className="text-center">
@@ -115,19 +128,29 @@ const Register = () => {
                 required
               />
             </div>
-            
-            <div className="relative">
+              <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Lock className="h-5 w-5 text-gray-400" />
               </div>
               <input
-                type="password"
-                className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                type={showPassword ? "text" : "password"}
+                className="block w-full pl-10 pr-10 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                 placeholder={t('register.password')}
                 value={credentials.password}
                 onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
                 required
               />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-5 w-5 text-gray-400" />
+                ) : (
+                  <Eye className="h-5 w-5 text-gray-400" />
+                )}
+              </button>
             </div>
             
             <div className="relative">
@@ -135,13 +158,24 @@ const Register = () => {
                 <Lock className="h-5 w-5 text-gray-400" />
               </div>
               <input
-                type="password"
-                className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                type={showConfirmPassword ? "text" : "password"}
+                className="block w-full pl-10 pr-10 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                 placeholder={t('register.confirmPassword')}
                 value={credentials.confirmPassword}
                 onChange={(e) => setCredentials({ ...credentials, confirmPassword: e.target.value })}
                 required
               />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className="h-5 w-5 text-gray-400" />
+                ) : (
+                  <Eye className="h-5 w-5 text-gray-400" />
+                )}
+              </button>
             </div>
           </div>
 

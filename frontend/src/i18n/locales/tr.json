@@ -28,7 +28,10 @@
       "imperial": "İmparatorluk (°F, ft³)"
     },
     "saveChanges": "Değişiklikleri Kaydet",
-    "saving": "Kaydediliyor..."
+    "saving": "Kaydediliyor...",
+    "saveSuccess": "Ayarlar başarıyla kaydedildi",
+    "loadError": "Ayarlar yüklenemedi. Varsayılanlar kullanılıyor.",
+    "saveError": "Ayarlar kaydedilemedi"
   },
   "login": {
     "title": "Hesabınıza Giriş Yapın",
@@ -120,5 +123,15 @@
   "trend": {
     "title": "24 Saatlik Trend",
     "legendHelp": "Değerleri göstermek veya gizlemek için etiketlere tıklayın"
+  },
+  "errors": {
+    "dataLoadFailed": "Veri yüklenemedi",
+    "tryAgainMessage": "Lütfen internet bağlantınızı kontrol edin ve tekrar deneyin",
+    "historicalDataFailed": "Geçmiş sensör verileri yüklenemedi",
+    "noDataAvailable": "Seçilen dönem için veri bulunamadı",
+    "pdfGenerationFailed": "PDF raporu oluşturulamadı"
+  },
+  "actions": {
+    "refresh": "Yenile"
   }
 }
