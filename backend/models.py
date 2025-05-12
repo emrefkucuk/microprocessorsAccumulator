@@ -61,3 +61,14 @@ class Alert(Base):
 
     # Kullanıcı ile ilişki kurmak
     user = relationship("User", back_populates="alerts")
+
+class AIOutput(Base):
+    __tablename__ = 'aiOutput'
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime, nullable=False)
+    temperature = Column(Float, nullable=True)
+    humidity = Column(Float, nullable=True)
+    pm25 = Column(Float, nullable=True)
+    pm10 = Column(Float, nullable=True)
+    prediction = Column(String(50), nullable=False)

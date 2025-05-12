@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 from datetime import datetime
-
+import joblib
 import auth
 from database import SessionLocal, engine
 import models, schemas
@@ -274,3 +274,79 @@ def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+#AI END POINTS    
+@app.get(f"{api_prefix}/ai/latest", response_model=schemas.AIOutput)
+def get_latest_prediction(db: Session = Depends(get_db)):
+    latest_prediction = db.query(models.AIOutput).order_by(models.AIOutput.timestamp.desc()).first()
+    if not latest_prediction:
+        raise HTTPException(status_code=404, detail="No predictions found")
+    return latest_prediction
+
+@app.post("/ml/process")
+def process_and_store_ai_output(
+    start_time: Optional[datetime] = Query(None),
+    end_time: Optional[datetime] = Query(None),
+    db: Session = Depends(get_db)
+):
+    query = db.query(
+        models.ArduinoData.timestamp,
+        models.ArduinoData.temperature,
+        models.ArduinoData.humidity,
+        models.ArduinoData.pm25,
+        models.ArduinoData.pm10
+    )
+
+    if start_time and end_time:
+        query = query.filter(models.ArduinoData.timestamp.between(start_time, end_time))
+
+    sensor_data = query.all()
+
+    for row in sensor_data:
+
+        time = row.timestamp
+        month = str(time).split('-')[1]
+        season_index = get_season(month)
+
+        data_for_prediction = [
+            row.temperature, 
+            row.humidity, 
+            row.pm25, 
+            row.pm10, 
+            season_index  # Add the season index as an additional feature for the model
+        ]
+        label = predict(data_for_prediction)
+
+        ai_output = AIOutput(
+            timestamp=row.timestamp,
+            temperature=row.temperature,
+            humidity=row.humidity,
+            pm25=row.pm25,
+            pm10=row.pm10,
+            prediction=label
+        )
+
+        db.add(ai_output)
+
+    db.commit()
+    return {"message": "AI outputs processed and stored."}
+
+
+def get_season(month):
+    if month in [12, 1, 2]:
+        return 3
+    elif month in [3, 4, 5]:
+        return 2
+    elif month in [6, 7, 8]:
+        return 1
+    else:
+        return 0
+
+def predict(data):
+    categories = ["GOOD", "Moderate", "Unhealthy for Sensitive Groups", 
+                  "Unhealthy", "Very Unhealthy", "Hazardous"]
+
+
+    model = joblib.load("rf_model.pkl")
+    output = model.predict([data])    
+    return categories[output]

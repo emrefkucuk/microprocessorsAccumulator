@@ -62,3 +62,19 @@ class UserOut(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class AIOutputBase(BaseModel):
+    timestamp: datetime
+    temperature: float
+    humidity: float
+    pm25: float
+    pm10: float
+    prediction: str
+    class Config:
+        from_attributes = True
+
+class AIOutput(AIOutputBase):
+    id: int
+
+    class Config:
+        from_attributes = True  # V2'de from_attributes olabilir, uyarı alırsan güncellersin
