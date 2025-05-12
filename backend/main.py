@@ -343,7 +343,8 @@ def predict(data):
     categories = ["GOOD", "Moderate", "Unhealthy for Sensitive Groups", 
                   "Unhealthy", "Very Unhealthy", "Hazardous"]
 
-    model = joblib.load("backend\\rf_model.pkl")
+# ("rf_model.pkl") ("backend//rf_model.pkl")
+    model = joblib.load("rf_model.pkl")
     output = model.predict([data])    
     return categories[int(output[0])]
 
