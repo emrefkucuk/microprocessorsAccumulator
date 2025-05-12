@@ -10,8 +10,8 @@ class SensorData(BaseModel):
     pm10: float
     co2: float
     voc: float
-    # latitude: Optional[float] = None
-    # longitude: Optional[float] = None
+    class Config:
+        from_attributes = True
 
 class PartialSensorData(BaseModel):
     timestamp: datetime

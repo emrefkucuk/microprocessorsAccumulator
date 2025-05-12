@@ -1,24 +1,24 @@
-# models.py
-import datetime
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, String, JSON
+from datetime import datetime
+from sqlalchemy import (
+    Column, Integer, String, Float, Boolean, DateTime, ForeignKey, JSON
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
-Base = declarative_base()  # SQLAlchemy'nin model taban sınıfı
+Base = declarative_base()
 
 class ArduinoData(Base):
     __tablename__ = 'arduino_data'
 
-    data_id = Column(Integer, primary_key=True, index=True)  # Benzersiz ID
-    timestamp = Column(DateTime, nullable=False)  # Zaman damgası
-    temperature = Column(Float, nullable=False)  # Sıcaklık verisi
-    humidity = Column(Float, nullable=False)  # Nem verisi
-    pm25 = Column(Float, nullable=False)  # PM2.5
-    pm10 = Column(Float, nullable=False)  # PM10
-    co2 = Column(Float, nullable=False)  # CO2
-    voc = Column(Float, nullable=False)  # VOC (Volatil Organik Bileşikler)
-    # latitude = Column(Float, nullable=True)  # Enlem (isteğe bağlı)
-    # longitude = Column(Float, nullable=True)  # Boylam (isteğe bağlı)
+    data_id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    temperature = Column(Float, nullable=False)
+    humidity = Column(Float, nullable=False)
+    pm25 = Column(Float, nullable=False)
+    pm10 = Column(Float, nullable=False)
+    co2 = Column(Float, nullable=False)
+    voc = Column(Float, nullable=False)
 
 class User(Base):
     __tablename__ = 'users'
@@ -30,43 +30,36 @@ class User(Base):
 
     settings = relationship("UserSettings", back_populates="user", uselist=False)
     alerts = relationship("Alert", back_populates="user")
-    
+
 class UserSettings(Base):
     __tablename__ = 'user_settings'
 
-    id = Column(Integer, primary_key=True, index=True)  # Benzersiz ID
-    notifications = Column(Integer, nullable=False)  # Bildirim ayarı (1 = True, 0 = False)
-    format = Column(String(50), nullable=False)  # UserSettings
-
-    thresholds = Column(JSON, nullable=False)  # Eşik değerleri (JSON formatında)
-    
-    # Kullanıcıya ait ayarları bağlayacak foreign key
+    id = Column(Integer, primary_key=True, index=True)
+    notifications = Column(Integer, nullable=False)
+    format = Column(String(50), nullable=False)
+    thresholds = Column(JSON, nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'))
 
-    # Kullanıcı ile ilişki kurmak
     user = relationship("User", back_populates="settings")
 
 class Alert(Base):
     __tablename__ = 'alerts'
 
-    id = Column(Integer, primary_key=True, index=True)  # Benzersiz ID
-    timestamp = Column(DateTime)  # Alarm zamanı
-    type = Column(String(50), nullable=False)    # Alert
-    value = Column(Float, nullable=False)  # Alarm değeri
-    threshold = Column(Float, nullable=False)  # Alarmın eşik değeri
-    acknowledged = Column(Boolean, default=False)  # Alarmın onaylanıp onaylanmadığı
-
-    # Kullanıcıya ait alarmı bağlayacak foreign key
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    type = Column(String(50), nullable=False)
+    value = Column(Float, nullable=False)
+    threshold = Column(Float, nullable=False)
+    acknowledged = Column(Boolean, default=False)
     user_id = Column(Integer, ForeignKey('users.id'))
 
-    # Kullanıcı ile ilişki kurmak
     user = relationship("User", back_populates="alerts")
 
 class AIOutput(Base):
     __tablename__ = 'aiOutput'
 
     id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, nullable=False)
+    timestamp = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     temperature = Column(Float, nullable=True)
     humidity = Column(Float, nullable=True)
     pm25 = Column(Float, nullable=True)

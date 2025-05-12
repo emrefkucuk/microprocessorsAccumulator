@@ -4,16 +4,28 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta,timezone
 import joblib
 import auth
 from database import SessionLocal, engine
 import models, schemas
+from fastapi import BackgroundTasks
+from utils.email import send_alert_email
+import logging
+from jinja2 import Environment, FileSystemLoader
+
+# Loglama yapılandırması
+logging.basicConfig(
+    level=logging.DEBUG, 
+    format='%(asctime)s - %(levelname)s - %(message)s', 
+    handlers=[logging.FileHandler("app.log"), logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
-
+logger.info("Uygulama başlatıldı.")
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -34,65 +46,101 @@ api_prefix = "/api"
 
 # ENDPOINTS
 
+from fastapi import BackgroundTasks
+from utils.email import send_alert_email  # doğru path ile import et
+
 @app.post(f"{api_prefix}/sensors/data")
-async def receive_data(data: schemas.SensorData, db: Session = Depends(get_db)):
-    # Veriyi veritabanına kaydet
-    new_data = models.ArduinoData(**data.dict())
+async def receive_data(
+    data: schemas.SensorData,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    now_utc = datetime.now(timezone.utc)
+
+    payload = data.model_dump()
+    payload["timestamp"] = now_utc  # timestamp override
+    new_data = models.ArduinoData(**payload)
     db.add(new_data)
     db.commit()
-    db.refresh(new_data)
 
-    # Tüm kullanıcı ayarlarını getir
-    all_settings = db.query(models.UserSettings).all()
+    users = db.query(models.User).all()
 
-    alerts = []
+    for user in users:
+        settings = db.query(models.UserSettings).filter_by(user_id=user.id).first()
+        if not settings or not settings.notifications:
+            continue
 
-    for setting in all_settings:
-        thresholds = setting.thresholds
+        thresholds = settings.thresholds
         exceeded = []
 
-        # Hangi eşikler aşılmış kontrol et
-        if data.co2 is not None and data.co2 > thresholds.get("co2", float("inf")):
-            exceeded.append(("co2", data.co2, thresholds.get("co2")))
-        if data.pm25 is not None and data.pm25 > thresholds.get("pm25", float("inf")):
-            exceeded.append(("pm25", data.pm25, thresholds.get("pm25")))
-        if data.pm10 is not None and data.pm10 > thresholds.get("pm10", float("inf")):
-            exceeded.append(("pm10", data.pm10, thresholds.get("pm10")))
-        if data.voc is not None and data.voc > thresholds.get("voc", float("inf")):
-            exceeded.append(("voc", data.voc, thresholds.get("voc")))
+        for pollutant in ["co2", "pm25", "pm10", "voc"]:
+            current_value = getattr(data, pollutant)
+            threshold = thresholds.get(pollutant)
 
-        # Eşik aşılmışsa alert oluştur
-        for metric, value, threshold in exceeded:
-            alert = models.Alert(
-                user_id=setting.user_id,
-                timestamp=new_data.timestamp,
-                type=metric,
-                value=value,
-                threshold=threshold
-            )
-            db.add(alert)
-            alerts.append(alert)
+            if current_value and threshold and current_value > threshold:
+                recent_alert = db.query(models.Alert).filter_by(
+                    user_id=user.id,
+                    type=pollutant,
+                    value=current_value
+                ).order_by(models.Alert.timestamp.desc()).first()
+
+                if recent_alert:
+                    alert_time = recent_alert.timestamp
+                    if alert_time.tzinfo is None:
+                        alert_time = alert_time.replace(tzinfo=timezone.utc)
+
+                    if alert_time > now_utc - timedelta(minutes=5):
+                        logger.info(f"Alarm for {pollutant} already sent recently for user {user.email}. Skipping...")
+                        continue  # aynı alarm zaten yakın zamanda gönderilmiş
+
+                exceeded.append({
+                    "type": pollutant,
+                    "value": current_value,
+                    "threshold": threshold
+                })
+
+                alert = models.Alert(
+                    user_id=user.id,
+                    timestamp=now_utc,
+                    type=pollutant,
+                    value=current_value,
+                    threshold=threshold,
+                    acknowledged=False
+                )
+                db.add(alert)
+
+        if exceeded:
+            
+
+            # Loglama: Uyarı gönderme öncesi log
+            logger.info(f"Sending alert email to {user.email} with exceeded thresholds: {exceeded}")
+
+            # Burada 'user_email' kullanmalıyız
+            background_tasks.add_task(
+            send_alert_email,
+            user_email=user.email,
+            alert_info={
+                "timestamp": now_utc.strftime("%Y-%m-%d %H:%M:%S"),
+                "co2": getattr(data, "co2"),
+                "pm25": getattr(data, "pm25"),
+                "pm10": getattr(data, "pm10"),
+                "voc": getattr(data, "voc"),
+                "temperature": getattr(data, "temperature"),
+                "humidity": getattr(data, "humidity"),
+            },
+            thresholds=thresholds
+        )
+
+        
 
     db.commit()
-
     return {
         "success": True,
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "alerts_triggered": len(alerts)
+        "timestamp": now_utc.strftime("%Y-%m-%d %H:%M:%S")
     }
 
 
-# @app.get(f"{api_prefix}/sensors/history", response_model=List[schemas.SensorData])
-# async def get_data(
-#     start: Optional[datetime] = Query(None),
-#     end: Optional[datetime] = Query(None),
-#     db: Session = Depends(get_db)
-# ):
-#     query = db.query(models.ArduinoData).order_by(models.ArduinoData.timestamp.desc()).limit(180)
-#     if start and end:
-#         query = query.filter(models.ArduinoData.timestamp.between(start, end))
-#     records = query.all()
-#     return records
+
 @app.get(f"{api_prefix}/sensors/history", response_model=List[schemas.SensorData])
 async def get_data(
     start: Optional[datetime] = Query(None),
@@ -125,10 +173,7 @@ def get_sensor_summary(
         models.ArduinoData.pm10
     )
 
-    # if start_time:
-    #     query = query.filter(models.ArduinoData.timestamp >= start_time)
-    # if end_time:
-    #     query = query.filter(models.ArduinoData.timestamp <= end_time)
+
     if start_time and end_time:
         query = query.filter(models.ArduinoData.timestamp.between(start_time, end_time))
 
