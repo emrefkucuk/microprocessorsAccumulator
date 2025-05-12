@@ -204,12 +204,7 @@ def update_user_settings(
     db.refresh(settings)
     return settings
 
-@app.get(f"{api_prefix}/alerts/recent", response_model=List[schemas.Alert])
-async def get_recent_alerts():
-    return [
-        schemas.Alert(id=1, timestamp=datetime.now().isoformat(), type="co2", value=1200, threshold=1000),
-        schemas.Alert(id=2, timestamp=datetime.now().isoformat(), type="pm25", value=50, threshold=35),
-    ]
+
 
 @app.get("/api/alerts/unacknowledged", response_model=List[schemas.Alert])
 def get_user_unacknowledged_alerts(
