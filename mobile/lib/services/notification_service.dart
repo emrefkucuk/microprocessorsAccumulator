@@ -1,76 +1,146 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../models/air_quality_data.dart';
 import '../models/sensor_data.dart';
+import 'auth_service.dart';
+import 'user_settings_service.dart';
 import 'data_service.dart';
 
-/// A simplified notification service that stores settings and logs notifications
-/// but doesn't actually show them.
-/// This can be replaced with a full implementation later.
+/// Enhanced notification service that integrates with backend alerts
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  // Notification settings
-  bool _healthAdviceEnabled = true;
-  bool _extremeValueAlertsEnabled = true;
-  bool _dailyReportsEnabled = true;
+  // Backend URL - automatically detect if running on emulator
+  String get baseUrl {
+    if (Platform.isAndroid) {
+      return 'http://10.0.2.2:8000/api';
+    } else {
+      return 'http://localhost:8000/api';
+    }
+  }
 
   // Timers
   Timer? _healthAdviceTimer;
   Timer? _dailyReportTimer;
+  Timer? _alertCheckTimer;
+
+  // Settings service reference
+  final UserSettingsService _settingsService = UserSettingsService();
+
+  // Notification settings (synced with backend)
+  bool get healthAdviceEnabled =>
+      _settingsService.getSetting<bool>('health_advice_enabled') ?? true;
+  bool get extremeValueAlertsEnabled =>
+      _settingsService.getSetting<bool>('extreme_value_alerts_enabled') ?? true;
+  bool get dailyReportsEnabled =>
+      _settingsService.getSetting<bool>('daily_reports_enabled') ?? true;
 
   // Initialize the notifications service
+  // Initialize the notifications service
   Future<void> init() async {
-    // Load settings from persistent storage
-    await _loadSettings();
+    debugPrint('🔔 Notification service initialized');
 
-    debugPrint('🔔 Notification service initialized (simulated mode)');
+    // Set up data stream listeners with error handling
+    DataService().airQualityStream.listen(
+      _checkAirQualityAlerts,
+      onError: (error) {
+        debugPrint('Error in air quality stream: $error');
+      },
+    );
 
-    // Set up data stream listeners
-    DataService().airQualityStream.listen(_checkAirQualityAlerts);
-    DataService().sensorsStream.listen(_checkSensorAlerts);
+    DataService().sensorsStream.listen(
+      _checkSensorAlerts,
+      onError: (error) {
+        debugPrint('Error in sensors stream: $error');
+      },
+    );
 
     // Set up periodic notifications
     _setupPeriodicNotifications();
+
+    // Start checking for backend alerts every time data is fetched
+    _startAlertChecking();
   }
 
-  // Load notification settings from SharedPreferences
-  Future<void> _loadSettings() async {
+  // Start checking backend alerts regularly
+  void _startAlertChecking() {
+    _alertCheckTimer?.cancel();
+    _alertCheckTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _checkBackendAlerts(),
+    );
+  }
+
+  // Check for new alerts from backend
+  Future<void> _checkBackendAlerts() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      _healthAdviceEnabled = prefs.getBool('healthAdviceEnabled') ?? true;
-      _extremeValueAlertsEnabled =
-          prefs.getBool('extremeValueAlertsEnabled') ?? true;
-      _dailyReportsEnabled = prefs.getBool('dailyReportsEnabled') ?? true;
+      final headers = await _getHeaders();
+      if (headers['Authorization'] == null) return; // Not logged in
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/alerts/recent'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> alerts = json.decode(response.body);
+
+        for (final alert in alerts) {
+          if (!alert['acknowledged']) {
+            _showBackendAlert(alert);
+            // Mark as acknowledged in backend
+            await _acknowledgeAlert(alert['id']);
+          }
+        }
+      }
     } catch (e) {
-      debugPrint('Failed to load notification settings: $e');
-      // Fall back to defaults
-      _healthAdviceEnabled = true;
-      _extremeValueAlertsEnabled = true;
-      _dailyReportsEnabled = true;
+      debugPrint('Error checking backend alerts: $e');
     }
   }
 
-  // Save notification settings to SharedPreferences
-  Future<void> _saveSettings() async {
+  // Show a backend alert
+  void _showBackendAlert(Map<String, dynamic> alert) {
+    final type = alert['type']?.toString().toUpperCase() ?? 'UNKNOWN';
+    final value = alert['value'];
+    final threshold = alert['threshold'];
+    final alertId = (alert['id'] as num).toInt(); // Convert num to int
+
+    _showNotification(
+      id: 100 + alertId, // Now uses int instead of num
+      title: '$type Alert!',
+      body: '$type value ($value) exceeded threshold ($threshold)',
+      priority: 'high',
+    );
+  }
+
+  // Acknowledge an alert in the backend
+  Future<void> _acknowledgeAlert(int alertId) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('healthAdviceEnabled', _healthAdviceEnabled);
-      await prefs.setBool(
-          'extremeValueAlertsEnabled', _extremeValueAlertsEnabled);
-      await prefs.setBool('dailyReportsEnabled', _dailyReportsEnabled);
+      final headers = await _getHeaders();
+
+      // Note: This endpoint might need to be implemented in your backend
+      await http.put(
+        Uri.parse('$baseUrl/alerts/$alertId/acknowledge'),
+        headers: headers,
+      );
     } catch (e) {
-      debugPrint('Failed to save notification settings: $e');
+      debugPrint('Error acknowledging alert: $e');
     }
   }
 
-  // Getters for notification settings
-  bool get healthAdviceEnabled => _healthAdviceEnabled;
-  bool get extremeValueAlertsEnabled => _extremeValueAlertsEnabled;
-  bool get dailyReportsEnabled => _dailyReportsEnabled;
+  // Get authorization headers
+  Future<Map<String, String>> _getHeaders() async {
+    final token = await AuthService().getAuthToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': token,
+    };
+  }
 
   // Update notification settings
   Future<void> updateSettings({
@@ -78,28 +148,20 @@ class NotificationService {
     bool? extremeValueAlertsEnabled,
     bool? dailyReportsEnabled,
   }) async {
-    bool settingsChanged = false;
+    final updates = <String, dynamic>{};
 
-    if (healthAdviceEnabled != null &&
-        healthAdviceEnabled != _healthAdviceEnabled) {
-      _healthAdviceEnabled = healthAdviceEnabled;
-      settingsChanged = true;
+    if (healthAdviceEnabled != null) {
+      updates['health_advice_enabled'] = healthAdviceEnabled;
+    }
+    if (extremeValueAlertsEnabled != null) {
+      updates['extreme_value_alerts_enabled'] = extremeValueAlertsEnabled;
+    }
+    if (dailyReportsEnabled != null) {
+      updates['daily_reports_enabled'] = dailyReportsEnabled;
     }
 
-    if (extremeValueAlertsEnabled != null &&
-        extremeValueAlertsEnabled != _extremeValueAlertsEnabled) {
-      _extremeValueAlertsEnabled = extremeValueAlertsEnabled;
-      settingsChanged = true;
-    }
-
-    if (dailyReportsEnabled != null &&
-        dailyReportsEnabled != _dailyReportsEnabled) {
-      _dailyReportsEnabled = dailyReportsEnabled;
-      settingsChanged = true;
-    }
-
-    if (settingsChanged) {
-      await _saveSettings();
+    if (updates.isNotEmpty) {
+      await _settingsService.updateSettings(updates);
       _setupPeriodicNotifications();
     }
   }
@@ -111,13 +173,13 @@ class NotificationService {
     _dailyReportTimer?.cancel();
 
     // Set up health advice timer (every 6 hours) if enabled
-    if (_healthAdviceEnabled) {
+    if (healthAdviceEnabled) {
       _healthAdviceTimer =
           Timer.periodic(const Duration(hours: 6), (_) => _sendHealthAdvice());
     }
 
     // Set up daily report timer (at 5 PM) if enabled
-    if (_dailyReportsEnabled) {
+    if (dailyReportsEnabled) {
       _scheduleDailyReportAt5PM();
     }
   }
@@ -146,7 +208,7 @@ class NotificationService {
 
   // Check air quality data for potential alerts
   void _checkAirQualityAlerts(AirQualityData data) {
-    if (!_extremeValueAlertsEnabled) return;
+    if (!extremeValueAlertsEnabled) return;
 
     // Send alert if status is unhealthy
     if (data.status == AirQualityStatus.unhealthy) {
@@ -162,7 +224,7 @@ class NotificationService {
 
   // Check sensor data for extreme values
   void _checkSensorAlerts(List<SensorData> sensors) {
-    if (!_extremeValueAlertsEnabled) return;
+    if (!extremeValueAlertsEnabled) return;
 
     for (final sensor in sensors) {
       if (sensor.status == SensorStatus.critical) {
@@ -187,9 +249,10 @@ class NotificationService {
 
   // Send daily air quality report
   void _sendDailyReport() {
-    if (!_dailyReportsEnabled) return;
+    if (!dailyReportsEnabled) return;
 
     final data = DataService().currentAirQuality;
+    if (data == null) return;
 
     String statusText;
     switch (data.status) {
@@ -215,9 +278,11 @@ class NotificationService {
 
   // Send periodic health advice
   void _sendHealthAdvice() {
-    if (!_healthAdviceEnabled) return;
+    if (!healthAdviceEnabled) return;
 
     final data = DataService().currentAirQuality;
+    if (data == null) return;
+
     String advice;
 
     if (data.status == AirQualityStatus.good) {
@@ -256,5 +321,6 @@ class NotificationService {
   void dispose() {
     _healthAdviceTimer?.cancel();
     _dailyReportTimer?.cancel();
+    _alertCheckTimer?.cancel();
   }
 }

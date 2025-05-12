@@ -6,16 +6,36 @@ import 'screens/settings_screen.dart';
 import 'services/auth_service.dart';
 import 'services/data_service.dart';
 import 'services/notification_service.dart';
+// Add this to your main.dart to help diagnose network issues
+import 'dart:io';
 
+void printNetworkInfo() {
+  debugPrint('=== Network Debug Info ===');
+  debugPrint('Platform: ${Platform.operatingSystem}');
+  debugPrint('Is Android: ${Platform.isAndroid}');
+  debugPrint('Is iOS: ${Platform.isIOS}');
+
+  // For Android emulator, localhost should be 10.0.2.2
+  // For iOS simulator, localhost works as expected
+  final suggestedUrl =
+      Platform.isAndroid ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
+  debugPrint('Suggested backend URL: $suggestedUrl');
+  debugPrint('========================');
+}
+
+// Add this call in your main() function
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize services
+  // Initialize services with timeout
   try {
-    await NotificationService().init();
-    await DataService().init();
+    await Future.wait([
+      NotificationService().init(),
+      DataService().init(),
+    ]).timeout(const Duration(seconds: 10));
   } catch (e) {
     debugPrint('Error initializing services: $e');
+    // Continue anyway with mock data
   }
 
   runApp(const AirQualityApp());
