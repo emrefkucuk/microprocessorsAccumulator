@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -15,6 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLoading = false;
   String _errorMessage = '';
+  bool _rememberMe = false;
 
   @override
   void dispose() {
@@ -41,6 +43,9 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (success) {
+        // Save remember me preference
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('remember_me', _rememberMe);
         // Navigate to the main screen and remove all previous routes
         Navigator.of(context)
             .pushNamedAndRemoveUntil('/main', (route) => false);
@@ -170,6 +175,21 @@ class _LoginScreenState extends State<LoginScreen> {
                       }
                       return null;
                     },
+                  ),
+
+                  // Remember Me Checkbox
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _rememberMe,
+                        onChanged: (value) {
+                          setState(() {
+                            _rememberMe = value ?? false;
+                          });
+                        },
+                      ),
+                      const Text('Remember Me'),
+                    ],
                   ),
 
                   // Error Message

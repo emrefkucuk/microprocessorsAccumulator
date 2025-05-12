@@ -21,7 +21,6 @@ class _MainScreenState extends State<MainScreen> {
     _dataService = DataService();
     _loadData();
   }
-
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
@@ -29,8 +28,10 @@ class _MainScreenState extends State<MainScreen> {
 
     try {
       await _dataService.refreshData();
-      // Add a delay to allow the data to be processed
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Debug output to verify data is loaded
+      debugPrint('Daily air quality data size: ${_dataService.dailyAirQuality.length}');
+      debugPrint('Monthly air quality data size: ${_dataService.monthlyAirQuality.length}');
+      
     } catch (e) {
       debugPrint('Error loading data: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -96,9 +97,7 @@ class _MainScreenState extends State<MainScreen> {
                       },
                     ),
 
-                    const SizedBox(height: 24),
-
-                    // Daily Chart
+                    const SizedBox(height: 24),                    // Daily Chart
                     const Text(
                       'Daily Air Quality',
                       style: TextStyle(
@@ -108,23 +107,41 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                     const SizedBox(height: 8),
                     SizedBox(
-                      height: 225,
-                      child: _dataService.dailyAirQuality.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Loading daily data...',
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            )
-                          : AirQualityChart(
-                              data: _dataService.dailyAirQuality,
+                      height: 250, // Increased height for better chart visibility
+                      child: StreamBuilder<List<AirQualityData>>(
+                        stream: _dataService.dailyAirQualityStream,
+                        initialData: _dataService.dailyAirQuality,
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                            return AirQualityChart(
+                              data: snapshot.data!,
                               timeFormat: 'HH:mm',
-                            ),
+                            );
+                          } else {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    color: Colors.grey,
+                                    size: 36,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Bu gün için veri bulunamadı',
+                                    style: TextStyle(color: Colors.grey),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                        },
+                      ),
                     ),
 
-                    const SizedBox(height: 24),
-
-                    // Monthly Chart
+                    const SizedBox(height: 24),                    // Monthly Chart
                     const Text(
                       'Monthly Air Quality',
                       style: TextStyle(
@@ -134,18 +151,38 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                     const SizedBox(height: 8),
                     SizedBox(
-                      height: 225,
-                      child: _dataService.monthlyAirQuality.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Loading monthly data...',
-                                style: TextStyle(color: Colors.grey),
+                      height: 250, // Increased height for better chart visibility
+                      child: StreamBuilder<List<AirQualityData>>(
+                        stream: _dataService.monthlyAirQualityStream,
+                        initialData: _dataService.monthlyAirQuality,
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                            return AirQualityChart(
+                              data: snapshot.data!,
+                              timeFormat: 'dd/MM',
+                            );
+                          } else {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    color: Colors.grey,
+                                    size: 36,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Bu ay için veri bulunamadı',
+                                    style: TextStyle(color: Colors.grey),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
                               ),
-                            )
-                          : AirQualityChart(
-                              data: _dataService.monthlyAirQuality,
-                              timeFormat: 'MM/dd',
-                            ),
+                            );
+                          }
+                        },
+                      ),
                     ),
 
                     const SizedBox(height: 24),

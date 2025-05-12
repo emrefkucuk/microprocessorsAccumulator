@@ -176,6 +176,7 @@ class AuthService {
       await prefs.setBool(_authKey, false);
       await prefs.remove(_userEmailKey);
       await prefs.remove(_authTokenKey);
+      await prefs.setBool('remember_me', false); // Remember Me sıfırlansın
     } catch (e) {
       debugPrint('Logout error: $e');
     }
