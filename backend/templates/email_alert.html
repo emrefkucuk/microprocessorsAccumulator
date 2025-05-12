@@ -51,7 +51,7 @@
     {% set th_pm10 = thresholds.get('pm10', 50) %}
     {% set th_voc = thresholds.get('voc', 500) %}
     
-    <p><strong>Belirlediğiniz eşik değerleri aşılanlar:</strong></p>
+    
 
     <div class="info-box">
       <strong>🕒 Zaman:</strong> {{ timestamp }}<br>
@@ -63,6 +63,7 @@
       💧 Nem: % {{ humidity }} 
     </div>
 
+    <p><strong>Belirlediğiniz eşik değerleri aşılanlar:</strong></p>
     {% if co2 is not none and co2 > th_co2 %}
     <div class="alert-box">
       <strong>⚠️ 💨 CO₂:</strong> {{ co2 }} ppm (Eşik: {{ th_co2 }})
