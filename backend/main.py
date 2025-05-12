@@ -36,10 +36,51 @@ api_prefix = "/api"
 
 @app.post(f"{api_prefix}/sensors/data")
 async def receive_data(data: schemas.SensorData, db: Session = Depends(get_db)):
+    # Veriyi veritabanına kaydet
     new_data = models.ArduinoData(**data.dict())
     db.add(new_data)
     db.commit()
-    return {"success": True, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+    db.refresh(new_data)
+
+    # Tüm kullanıcı ayarlarını getir
+    all_settings = db.query(models.UserSettings).all()
+
+    alerts = []
+
+    for setting in all_settings:
+        thresholds = setting.thresholds
+        exceeded = []
+
+        # Hangi eşikler aşılmış kontrol et
+        if data.co2 is not None and data.co2 > thresholds.get("co2", float("inf")):
+            exceeded.append(("co2", data.co2, thresholds.get("co2")))
+        if data.pm25 is not None and data.pm25 > thresholds.get("pm25", float("inf")):
+            exceeded.append(("pm25", data.pm25, thresholds.get("pm25")))
+        if data.pm10 is not None and data.pm10 > thresholds.get("pm10", float("inf")):
+            exceeded.append(("pm10", data.pm10, thresholds.get("pm10")))
+        if data.voc is not None and data.voc > thresholds.get("voc", float("inf")):
+            exceeded.append(("voc", data.voc, thresholds.get("voc")))
+
+        # Eşik aşılmışsa alert oluştur
+        for metric, value, threshold in exceeded:
+            alert = models.Alert(
+                user_id=setting.user_id,
+                timestamp=new_data.timestamp,
+                type=metric,
+                value=value,
+                threshold=threshold
+            )
+            db.add(alert)
+            alerts.append(alert)
+
+    db.commit()
+
+    return {
+        "success": True,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "alerts_triggered": len(alerts)
+    }
+
 
 # @app.get(f"{api_prefix}/sensors/history", response_model=List[schemas.SensorData])
 # async def get_data(
