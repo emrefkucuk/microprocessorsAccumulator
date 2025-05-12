@@ -211,6 +211,40 @@ async def get_recent_alerts():
         schemas.Alert(id=2, timestamp=datetime.now().isoformat(), type="pm25", value=50, threshold=35),
     ]
 
+@app.get("/api/alerts/unacknowledged", response_model=List[schemas.Alert])
+def get_user_unacknowledged_alerts(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    alerts = db.query(models.Alert).filter(
+        models.Alert.user_id == current_user.id,
+        models.Alert.acknowledged == False  # veya == 0 eğer boolean değilse
+    ).order_by(models.Alert.timestamp.desc()).all()
+    return alerts
+
+@app.post("/api/alerts/acknowledge", response_model=schemas.Alert)
+def acknowledge_alert(
+    request: schemas.AlertAcknowledgeRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    alert = db.query(models.Alert).filter(
+        models.Alert.id == request.alert_id,
+        models.Alert.user_id == current_user.id
+    ).first()
+
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found or not yours")
+
+    if alert.acknowledged:
+        raise HTTPException(status_code=400, detail="Already acknowledged")
+
+    alert.acknowledged = True
+    db.commit()
+    db.refresh(alert)
+
+    return alert
+
 #USER AUTHENTICATION
 @app.post("/auth/register", response_model=schemas.UserOut)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):

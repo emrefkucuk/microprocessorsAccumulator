@@ -36,11 +36,17 @@ class UserSettingsCreate(BaseModel):
 
 class Alert(BaseModel):
     id: int
-    timestamp: str
+    timestamp: datetime
     type: str
     value: float
     threshold: float
     acknowledged: Optional[bool] = False
+
+    class Config:
+        from_attributes = True
+
+class AlertAcknowledgeRequest(BaseModel):
+    alert_id: int    
 
 class UserCreate(BaseModel):
     email: str
