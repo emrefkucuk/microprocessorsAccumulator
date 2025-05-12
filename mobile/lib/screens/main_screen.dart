@@ -29,6 +29,8 @@ class _MainScreenState extends State<MainScreen> {
 
     try {
       await _dataService.refreshData();
+      // Add a delay to allow the data to be processed
+      await Future.delayed(const Duration(milliseconds: 500));
     } catch (e) {
       debugPrint('Error loading data: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -70,12 +72,25 @@ class _MainScreenState extends State<MainScreen> {
                       stream: _dataService.airQualityStream,
                       initialData: _dataService.currentAirQuality,
                       builder: (context, snapshot) {
-                        if (snapshot.hasData) {
+                        if (snapshot.hasData && snapshot.data != null) {
                           return SummaryBox(airQualityData: snapshot.data!);
                         } else {
-                          return const SizedBox(
-                            height: 100,
-                            child: Center(child: CircularProgressIndicator()),
+                          return Container(
+                            height: 140,
+                            padding: const EdgeInsets.all(16.0),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(12.0),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                'Loading air quality data...',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
                           );
                         }
                       },
@@ -93,16 +108,23 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                     const SizedBox(height: 8),
                     SizedBox(
-                      height: 225, // Increased height to accommodate labels
-                      child: AirQualityChart(
-                        data: _dataService.dailyAirQuality,
-                        timeFormat: 'HH:mm',
-                      ),
+                      height: 225,
+                      child: _dataService.dailyAirQuality.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'Loading daily data...',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            )
+                          : AirQualityChart(
+                              data: _dataService.dailyAirQuality,
+                              timeFormat: 'HH:mm',
+                            ),
                     ),
 
                     const SizedBox(height: 24),
 
-// Monthly Chart
+                    // Monthly Chart
                     const Text(
                       'Monthly Air Quality',
                       style: TextStyle(
@@ -112,11 +134,18 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                     const SizedBox(height: 8),
                     SizedBox(
-                      height: 225, // Increased height to accommodate labels
-                      child: AirQualityChart(
-                        data: _dataService.monthlyAirQuality,
-                        timeFormat: 'MM/dd',
-                      ),
+                      height: 225,
+                      child: _dataService.monthlyAirQuality.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'Loading monthly data...',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            )
+                          : AirQualityChart(
+                              data: _dataService.monthlyAirQuality,
+                              timeFormat: 'MM/dd',
+                            ),
                     ),
 
                     const SizedBox(height: 24),

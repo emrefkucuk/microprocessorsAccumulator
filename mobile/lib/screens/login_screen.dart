@@ -52,19 +52,50 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       setState(() {
-        _errorMessage = 'An error occurred: $e';
+        _errorMessage = 'Unable to connect to server. Please try again.';
         _isLoading = false;
       });
     }
   }
 
   Future<void> _register() async {
-    // This will be implemented later when API integration is ready
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Registration will be available in a future update'),
-      ),
-    );
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final authService = AuthService();
+      final result = await authService.register(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+
+      setState(() {
+        _isLoading = false;
+        if (result['success']) {
+          // Show success message
+          _errorMessage = '';
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registration successful! Please log in.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          _errorMessage = result['message'];
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Unable to connect to server. Please try again.';
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -186,10 +217,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
-                    child: const Text(
-                      'Register',
-                      style: TextStyle(fontSize: 16),
-                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Register',
+                            style: TextStyle(fontSize: 16),
+                          ),
                   ),
                 ],
               ),
