@@ -272,9 +272,6 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
     return current_user
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
 #AI END POINTS    
 @app.get(f"{api_prefix}/ai/latest", response_model=schemas.AIOutput)
 def get_latest_prediction(db: Session = Depends(get_db)):
@@ -317,7 +314,7 @@ def process_and_store_ai_output(
         ]
         label = predict(data_for_prediction)
 
-        ai_output = AIOutput(
+        ai_output = models.AIOutput(
             timestamp=row.timestamp,
             temperature=row.temperature,
             humidity=row.humidity,
@@ -346,7 +343,9 @@ def predict(data):
     categories = ["GOOD", "Moderate", "Unhealthy for Sensitive Groups", 
                   "Unhealthy", "Very Unhealthy", "Hazardous"]
 
-
-    model = joblib.load("rf_model.pkl")
+    model = joblib.load("backend\\rf_model.pkl")
     output = model.predict([data])    
-    return categories[output]
+    return categories[int(output[0])]
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
