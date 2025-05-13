@@ -1,29 +1,31 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/air_quality_data.dart';
 import '../models/sensor_data.dart';
 import 'auth_service.dart';
-import 'dart:io';
+
+// Global navigator key to show SnackBar messages
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class DataService {
   static final DataService _instance = DataService._internal();
   factory DataService() => _instance;
   DataService._internal();
 
-  // Backend URL
   // Backend URL - automatically detect if running on emulator
   String get baseUrl {
     // If running on Android emulator, use special IP for localhost
-    // Otherwise, use localhost directly
     if (Platform.isAndroid) {
       return 'http://10.0.2.2:8000/api';
     } else {
       return 'http://localhost:8000/api';
     }
   }
+
   // Stream controllers to broadcast data updates
   final _airQualityStreamController =
       StreamController<AirQualityData>.broadcast();
@@ -61,16 +63,24 @@ class DataService {
   // Refresh rate in seconds (configurable in settings)
   int _refreshRate = 30;
 
+  // Track whether we have a pending historical data fetch
+  bool _fetchingHistoricalData = false;
+
   // Initialize the service
   Future<void> init() async {
+    debugPrint('Initializing DataService');
     await _loadRefreshRate();
     await _loadCachedData();
 
-    // Do an initial update
-    await _updateData();
+    // Do an initial update - this will trigger historical data fetching too
+    await _updateData().catchError((e) {
+      debugPrint('Error during initial data update: $e');
+    });
 
     // Start periodic updates
     _startPeriodicUpdates();
+
+    debugPrint('DataService initialization complete');
   }
 
   // Load refresh rate from settings
@@ -78,6 +88,7 @@ class DataService {
     try {
       final prefs = await SharedPreferences.getInstance();
       _refreshRate = prefs.getInt('refresh_rate') ?? 30;
+      debugPrint('Loaded refresh rate: $_refreshRate seconds');
     } catch (e) {
       debugPrint('Error loading refresh rate: $e');
       _refreshRate = 30;
@@ -90,6 +101,7 @@ class DataService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('refresh_rate', seconds);
       _refreshRate = seconds;
+      debugPrint('Updated refresh rate to: $_refreshRate seconds');
 
       // Restart periodic updates with new rate
       _startPeriodicUpdates();
@@ -105,6 +117,7 @@ class DataService {
       Duration(seconds: _refreshRate),
       (_) => _updateData(),
     );
+    debugPrint('Started periodic updates every $_refreshRate seconds');
   }
 
   // Load cached data for offline mode
@@ -116,6 +129,7 @@ class DataService {
       final currentJson = prefs.getString('current_air_quality');
       if (currentJson != null) {
         _currentAirQuality = AirQualityData.fromJson(json.decode(currentJson));
+        debugPrint('Loaded cached current air quality data');
       }
 
       // Load sensor readings
@@ -124,6 +138,7 @@ class DataService {
         final List<dynamic> jsonList = json.decode(sensorsJson);
         _sensorReadings =
             jsonList.map((item) => SensorData.fromJson(item)).toList();
+        debugPrint('Loaded ${_sensorReadings.length} cached sensor readings');
       }
 
       // Load daily data
@@ -132,6 +147,12 @@ class DataService {
         final List<dynamic> jsonList = json.decode(dailyJson);
         _dailyAirQuality =
             jsonList.map((item) => AirQualityData.fromJson(item)).toList();
+        debugPrint('Loaded ${_dailyAirQuality.length} cached daily readings');
+
+        // Make sure to push to stream
+        if (_dailyAirQuality.isNotEmpty) {
+          _dailyAirQualityStreamController.add(_dailyAirQuality);
+        }
       }
 
       // Load monthly data
@@ -140,20 +161,21 @@ class DataService {
         final List<dynamic> jsonList = json.decode(monthlyJson);
         _monthlyAirQuality =
             jsonList.map((item) => AirQualityData.fromJson(item)).toList();
-      }      // Notify listeners with cached data
+        debugPrint(
+            'Loaded ${_monthlyAirQuality.length} cached monthly readings');
+
+        // Make sure to push to stream
+        if (_monthlyAirQuality.isNotEmpty) {
+          _monthlyAirQualityStreamController.add(_monthlyAirQuality);
+        }
+      }
+
+      // Notify listeners with cached data
       if (_currentAirQuality != null) {
         _airQualityStreamController.add(_currentAirQuality!);
       }
+
       _sensorsStreamController.add(_sensorReadings);
-      
-      // Notify listeners with cached historical data
-      if (_dailyAirQuality.isNotEmpty) {
-        _dailyAirQualityStreamController.add(_dailyAirQuality);
-      }
-      
-      if (_monthlyAirQuality.isNotEmpty) {
-        _monthlyAirQualityStreamController.add(_monthlyAirQuality);
-      }
     } catch (e) {
       debugPrint('Error loading cached data: $e');
     }
@@ -176,15 +198,21 @@ class DataService {
         json.encode(_sensorReadings.map((s) => s.toJson()).toList()),
       );
 
-      await prefs.setString(
-        'daily_air_quality',
-        json.encode(_dailyAirQuality.map((a) => a.toJson()).toList()),
-      );
+      if (_dailyAirQuality.isNotEmpty) {
+        await prefs.setString(
+          'daily_air_quality',
+          json.encode(_dailyAirQuality.map((a) => a.toJson()).toList()),
+        );
+      }
 
-      await prefs.setString(
-        'monthly_air_quality',
-        json.encode(_monthlyAirQuality.map((a) => a.toJson()).toList()),
-      );
+      if (_monthlyAirQuality.isNotEmpty) {
+        await prefs.setString(
+          'monthly_air_quality',
+          json.encode(_monthlyAirQuality.map((a) => a.toJson()).toList()),
+        );
+      }
+
+      debugPrint('Saved all data to cache');
     } catch (e) {
       debugPrint('Error saving to cache: $e');
     }
@@ -198,39 +226,59 @@ class DataService {
       if (token != null) 'Authorization': token,
     };
   }
-  // Fetch current data from API
+
+  // Fetch current data and AI prediction from API
   Future<void> _updateData({int retryCount = 0}) async {
     try {
       final headers = await _getHeaders();
 
-      debugPrint('Fetching data from: ${baseUrl}/sensors/current');
-      debugPrint('Headers: $headers');
+      // Debug info
+      debugPrint('Fetching current sensor data from: $baseUrl/sensors/current');
 
       // Fetch current sensor data
       final currentResponse = await http.get(
-        Uri.parse('${baseUrl}/sensors/current'),
+        Uri.parse('$baseUrl/sensors/current'),
         headers: headers,
       );
 
       debugPrint('Current data response status: ${currentResponse.statusCode}');
-      debugPrint('Current data response body: ${currentResponse.body}');
 
       if (currentResponse.statusCode == 200) {
-        final data = json.decode(currentResponse.body);
+        try {
+          final data = json.decode(currentResponse.body);
+          debugPrint('Current data retrieved successfully');
 
-        // Convert backend sensor data to our format
-        _currentAirQuality = _convertToAirQualityData(data);
-        _sensorReadings = _convertToSensorDataList(data);
+          // Convert backend sensor data to our format
+          _currentAirQuality = _convertToAirQualityData(data);
+          _sensorReadings = _convertToSensorDataList(data);
 
-        // Fetch historical data on each update to keep charts current
-        await _fetchHistoricalData();
+          // Fetch AI prediction
+          await _fetchAIPrediction();
 
-        // Save to cache
-        await _saveToCache();
+          // Always fetch historical data if empty
+          if (_dailyAirQuality.isEmpty || _monthlyAirQuality.isEmpty) {
+            debugPrint('Historical data empty, fetching fresh data...');
+            await _fetchHistoricalData();
+          } else {
+            // Otherwise periodically refresh (every 5 minutes)
+            final now = DateTime.now();
+            if (now.minute % 5 == 0 && now.second < 10) {
+              debugPrint(
+                  'Periodic refresh of historical data (5-minute interval)');
+              await _fetchHistoricalData();
+            }
+          }
 
-        // Notify listeners
-        _airQualityStreamController.add(_currentAirQuality!);
-        _sensorsStreamController.add(_sensorReadings);
+          // Save to cache
+          await _saveToCache();
+
+          // Notify listeners
+          _airQualityStreamController.add(_currentAirQuality!);
+          _sensorsStreamController.add(_sensorReadings);
+        } catch (e) {
+          debugPrint('Failed to parse current data: $e');
+          throw Exception('Invalid data format from server');
+        }
       } else {
         debugPrint('Error response status: ${currentResponse.statusCode}');
         debugPrint('Error response body: ${currentResponse.body}');
@@ -244,233 +292,167 @@ class DataService {
       if (retryCount < 3) {
         await Future.delayed(Duration(seconds: 5 << retryCount));
         return _updateData(retryCount: retryCount + 1);
+      } else {
+        // Only show error message if we have a context
+        if (navigatorKey.currentContext != null) {
+          ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Unable to connect to server. Using cached data if available.'),
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
       }
 
       // Fall back to cached data if available
       if (_currentAirQuality != null) {
         debugPrint('Using cached data due to network error');
+        // Notify listeners with cached data
         _airQualityStreamController.add(_currentAirQuality!);
-        _sensorsStreamController.add(_sensorReadings);      }
+        _sensorsStreamController.add(_sensorReadings);
+      }
     }
   }
-  
-  // Fetch historical data  
-  Future<void> _fetchHistoricalData() async {
+
+  // Fetch AI prediction
+  Future<void> _fetchAIPrediction() async {
     try {
       final headers = await _getHeaders();
-      final now = DateTime.now().toUtc().add(const Duration(hours: 3)); // Türkiye saati
+
+      debugPrint('Fetching AI prediction from: $baseUrl/ai/latest');
+
+      final aiResponse = await http.get(
+        Uri.parse('$baseUrl/ai/latest'),
+        headers: headers,
+      );
+
+      debugPrint('AI prediction response status: ${aiResponse.statusCode}');
+
+      if (aiResponse.statusCode == 200) {
+        final aiData = json.decode(aiResponse.body);
+        debugPrint('AI prediction: ${aiData['prediction']}');
+
+        // Update the current air quality with AI prediction
+        if (_currentAirQuality != null) {
+          _currentAirQuality = AirQualityData(
+            aqi: _currentAirQuality!.aqi,
+            temperature: _currentAirQuality!.temperature,
+            humidity: _currentAirQuality!.humidity,
+            status: _currentAirQuality!.status,
+            timestamp: _currentAirQuality!.timestamp,
+            aiPrediction: aiData['prediction'],
+          );
+        }
+      } else {
+        debugPrint('Failed to fetch AI prediction: ${aiResponse.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error fetching AI prediction: $e');
+    }
+  }
+
+  // Fetch historical data
+  Future<void> _fetchHistoricalData() async {
+    // Prevent multiple concurrent fetches
+    if (_fetchingHistoricalData) {
+      debugPrint('Historical data fetch already in progress, skipping');
+      return;
+    }
+
+    _fetchingHistoricalData = true;
+
+    try {
+      final headers = await _getHeaders();
+      final now = DateTime.now();
 
       debugPrint('Fetching historical data...');
-      
+
       // Fetch daily data (24 hours)
       final dailyStart = now.subtract(const Duration(hours: 24));
-      final dailyUrl = '$baseUrl/sensors/history?start=${dailyStart.toIso8601String()}&end=${now.toIso8601String()}';
+      final dailyUrl =
+          '$baseUrl/sensors/history?start=${dailyStart.toIso8601String()}&end=${now.toIso8601String()}';
       debugPrint('Daily data URL: $dailyUrl');
-      
+
       final dailyResponse = await http.get(
         Uri.parse(dailyUrl),
         headers: headers,
       );
 
       debugPrint('Daily data response status: ${dailyResponse.statusCode}');
-      
+
       if (dailyResponse.statusCode == 200) {
         final List<dynamic> dailyData = json.decode(dailyResponse.body);
         debugPrint('Daily data received: ${dailyData.length} records');
-        
-        if (dailyData.isNotEmpty) {          // Process hourly averages for daily chart if we have data
-          _dailyAirQuality = _processHourlyAverages(dailyData);
-          debugPrint('Daily data processed: ${_dailyAirQuality.length} hourly records');
-          
-          // Notify listeners with updated daily data
+
+        if (dailyData.isNotEmpty) {
+          // Convert the data to AirQualityData objects
+          final airQualityDataList =
+              dailyData.map((item) => _convertToAirQualityData(item)).toList();
+
+          // Update the list with the new data
+          _dailyAirQuality = airQualityDataList;
+
+          // Make sure to add data to the stream
           _dailyAirQualityStreamController.add(_dailyAirQuality);
+          debugPrint(
+              'Added ${_dailyAirQuality.length} items to daily air quality stream');
         } else {
           debugPrint('No daily data available from API');
-          // Leave _dailyAirQuality empty to show the "no data" message
-          _dailyAirQualityStreamController.add([]);
         }
       } else {
-        debugPrint('Daily data error: ${dailyResponse.body}');
-        _dailyAirQualityStreamController.add([]);
-      }      // Fetch monthly data (30 days)
+        debugPrint('Daily data error response: ${dailyResponse.body}');
+      }
+
+      // Fetch monthly data (30 days)
       final monthlyStart = now.subtract(const Duration(days: 30));
-      final monthlyUrl = '$baseUrl/sensors/history?start=${monthlyStart.toIso8601String()}&end=${now.toIso8601String()}';
+      final monthlyUrl =
+          '$baseUrl/sensors/history?start=${monthlyStart.toIso8601String()}&end=${now.toIso8601String()}';
       debugPrint('Monthly data URL: $monthlyUrl');
-      
+
       final monthlyResponse = await http.get(
         Uri.parse(monthlyUrl),
         headers: headers,
       );
 
       debugPrint('Monthly data response status: ${monthlyResponse.statusCode}');
-      
+
       if (monthlyResponse.statusCode == 200) {
         final List<dynamic> monthlyData = json.decode(monthlyResponse.body);
         debugPrint('Monthly data received: ${monthlyData.length} records');
-        
+
         if (monthlyData.isNotEmpty) {
-          // Process daily averages for monthly chart if we have data
-          _monthlyAirQuality = _processDailyAverages(monthlyData);
-          debugPrint('Monthly data processed: ${_monthlyAirQuality.length} daily records');
-          
-          // Notify listeners with updated monthly data
+          // Convert the data to AirQualityData objects
+          final airQualityDataList = monthlyData
+              .map((item) => _convertToAirQualityData(item))
+              .toList();
+
+          // Update the list with the new data
+          _monthlyAirQuality = airQualityDataList;
+
+          // Make sure to add data to the stream
           _monthlyAirQualityStreamController.add(_monthlyAirQuality);
+          debugPrint(
+              'Added ${_monthlyAirQuality.length} items to monthly air quality stream');
         } else {
           debugPrint('No monthly data available from API');
-          // Leave _monthlyAirQuality empty to show the "no data" message
-          _monthlyAirQualityStreamController.add([]);
         }
       } else {
-        debugPrint('Monthly data error: ${monthlyResponse.body}');
-        _monthlyAirQualityStreamController.add([]);
+        debugPrint('Monthly data error response: ${monthlyResponse.body}');
       }
-      
-      // Save processed data to cache
+
+      // Save to cache after successful fetch
       await _saveToCache();
-      
     } catch (e) {
       debugPrint('Failed to fetch historical data: $e');
       debugPrint('Stack trace: ${StackTrace.current}');
+    } finally {
+      _fetchingHistoricalData = false;
     }
-  }
-  
-  // Process data into hourly averages for daily chart
-  List<AirQualityData> _processHourlyAverages(List<dynamic> rawData) {
-    // Group data by hour
-    Map<String, Map<String, dynamic>> hourlyGroups = {};
-    
-    for (final item in rawData) {
-      final timestamp = DateTime.parse(item['timestamp']);
-      final hourKey = '${timestamp.year}-${timestamp.month.toString().padLeft(2, '0')}-${timestamp.day.toString().padLeft(2, '0')} ${timestamp.hour.toString().padLeft(2, '0')}:00';
-      
-      if (!hourlyGroups.containsKey(hourKey)) {
-        hourlyGroups[hourKey] = {
-          'temperature': 0.0,
-          'humidity': 0.0,
-          'pm25': 0.0,
-          'pm10': 0.0,
-          'co2': 0.0,
-          'voc': 0.0,
-          'count': 0,
-          'timestamp': timestamp.copyWith(minute: 0, second: 0, microsecond: 0),
-        };
-      }
-      
-      hourlyGroups[hourKey]!['temperature'] += item['temperature'] ?? 0.0;
-      hourlyGroups[hourKey]!['humidity'] += item['humidity'] ?? 0.0;
-      hourlyGroups[hourKey]!['pm25'] += item['pm25'] ?? 0.0;
-      hourlyGroups[hourKey]!['pm10'] += item['pm10'] ?? 0.0;
-      hourlyGroups[hourKey]!['co2'] += item['co2'] ?? 0.0;
-      hourlyGroups[hourKey]!['voc'] += item['voc'] ?? 0.0;
-      hourlyGroups[hourKey]!['count'] += 1;
-    }
-    
-    // Calculate averages
-    List<AirQualityData> hourlyAverages = [];
-    hourlyGroups.forEach((hourKey, data) {
-      if (data['count'] > 0) {
-        final count = data['count'] as int;
-        final avgTemp = data['temperature'] / count;
-        final avgHumidity = data['humidity'] / count;
-        final avgPm25 = data['pm25'] / count;
-        final avgPm10 = data['pm10'] / count;
-        final avgCo2 = data['co2'] / count;
-        
-        final aqi = _calculateAQI(avgPm25, avgPm10, avgCo2);
-        AirQualityStatus status;
-        if (aqi < 50) {
-          status = AirQualityStatus.good;
-        } else if (aqi < 100) {
-          status = AirQualityStatus.moderate;
-        } else {
-          status = AirQualityStatus.unhealthy;
-        }
-        
-        hourlyAverages.add(AirQualityData(
-          aqi: aqi,
-          temperature: avgTemp,
-          humidity: avgHumidity,
-          status: status,
-          timestamp: data['timestamp'] as DateTime,
-        ));
-      }
-    });
-    
-    // Sort by timestamp ascending
-    hourlyAverages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    
-    return hourlyAverages;
-  }
-  
-  // Process data into daily averages for monthly chart
-  List<AirQualityData> _processDailyAverages(List<dynamic> rawData) {
-    // Group data by day
-    Map<String, Map<String, dynamic>> dailyGroups = {};
-    
-    for (final item in rawData) {
-      final timestamp = DateTime.parse(item['timestamp']);
-      final dayKey = '${timestamp.year}-${timestamp.month.toString().padLeft(2, '0')}-${timestamp.day.toString().padLeft(2, '0')}';
-      
-      if (!dailyGroups.containsKey(dayKey)) {
-        dailyGroups[dayKey] = {
-          'temperature': 0.0,
-          'humidity': 0.0,
-          'pm25': 0.0,
-          'pm10': 0.0,
-          'co2': 0.0,
-          'voc': 0.0,
-          'count': 0,
-          'timestamp': DateTime(timestamp.year, timestamp.month, timestamp.day),
-        };
-      }
-      
-      dailyGroups[dayKey]!['temperature'] += item['temperature'] ?? 0.0;
-      dailyGroups[dayKey]!['humidity'] += item['humidity'] ?? 0.0;
-      dailyGroups[dayKey]!['pm25'] += item['pm25'] ?? 0.0;
-      dailyGroups[dayKey]!['pm10'] += item['pm10'] ?? 0.0;
-      dailyGroups[dayKey]!['co2'] += item['co2'] ?? 0.0;
-      dailyGroups[dayKey]!['voc'] += item['voc'] ?? 0.0;
-      dailyGroups[dayKey]!['count'] += 1;
-    }
-    
-    // Calculate averages
-    List<AirQualityData> dailyAverages = [];
-    dailyGroups.forEach((dayKey, data) {
-      if (data['count'] > 0) {
-        final count = data['count'] as int;
-        final avgTemp = data['temperature'] / count;
-        final avgHumidity = data['humidity'] / count;
-        final avgPm25 = data['pm25'] / count;
-        final avgPm10 = data['pm10'] / count;
-        final avgCo2 = data['co2'] / count;
-        
-        final aqi = _calculateAQI(avgPm25, avgPm10, avgCo2);
-        AirQualityStatus status;
-        if (aqi < 50) {
-          status = AirQualityStatus.good;
-        } else if (aqi < 100) {
-          status = AirQualityStatus.moderate;
-        } else {
-          status = AirQualityStatus.unhealthy;
-        }
-        
-        dailyAverages.add(AirQualityData(
-          aqi: aqi,
-          temperature: avgTemp,
-          humidity: avgHumidity,
-          status: status,
-          timestamp: data['timestamp'] as DateTime,
-        ));
-      }
-    });
-    
-    // Sort by timestamp ascending
-    dailyAverages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    
-    return dailyAverages;
   }
 
   // Convert backend data to AirQualityData
+// Convert backend data to AirQualityData
   AirQualityData _convertToAirQualityData(Map<String, dynamic> data) {
     // Calculate AQI based on sensor values
     final pm25 = data['pm25'] ?? 0.0;
@@ -484,8 +466,24 @@ class DataService {
       status = AirQualityStatus.good;
     } else if (aqi < 100) {
       status = AirQualityStatus.moderate;
-    } else {
+    } else if (aqi < 150) {
+      status = AirQualityStatus.unhealthyForSensitiveGroups;
+    } else if (aqi < 200) {
       status = AirQualityStatus.unhealthy;
+    } else if (aqi < 300) {
+      status = AirQualityStatus.veryUnhealthy;
+    } else {
+      status = AirQualityStatus.hazardous;
+    }
+
+    // Extract the timestamp - ensure it's parsed correctly
+    DateTime timestamp;
+    try {
+      timestamp = DateTime.parse(data['timestamp']);
+    } catch (e) {
+      debugPrint('Error parsing timestamp: ${data['timestamp']}');
+      // Use current time as fallback
+      timestamp = DateTime.now();
     }
 
     return AirQualityData(
@@ -493,13 +491,21 @@ class DataService {
       temperature: data['temperature'] ?? 0.0,
       humidity: data['humidity'] ?? 0.0,
       status: status,
-      timestamp: DateTime.parse(data['timestamp']),
+      timestamp: timestamp,
     );
   }
 
   // Convert backend data to SensorData list
   List<SensorData> _convertToSensorDataList(Map<String, dynamic> data) {
-    final timestamp = DateTime.parse(data['timestamp']);
+    // Extract the timestamp - ensure it's parsed correctly
+    DateTime timestamp;
+    try {
+      timestamp = DateTime.parse(data['timestamp']);
+    } catch (e) {
+      debugPrint('Error parsing timestamp: ${data['timestamp']}');
+      // Use current time as fallback
+      timestamp = DateTime.now();
+    }
 
     return [
       SensorData(
@@ -588,19 +594,24 @@ class DataService {
         return SensorStatus.normal;
     }
   }
-  // Force an immediate data update
-  Future<void> refreshData() async {
+
+  // Force an immediate data update - include historical refresh flag
+  Future<void> refreshData({bool includeHistorical = true}) async {
     await _updateData();
-    // Historical data is already fetched in _updateData
-  }  // Clean up resources
+
+    // Force a refresh of historical data if requested
+    if (includeHistorical) {
+      debugPrint('Forcing historical data refresh');
+      await _fetchHistoricalData();
+    }
+  }
+
+  // Clean up resources
   void dispose() {
     _updateTimer?.cancel();
     _airQualityStreamController.close();
     _sensorsStreamController.close();
     _dailyAirQualityStreamController.close();
     _monthlyAirQualityStreamController.close();
-    _sensorReadings.clear();
-    _dailyAirQuality.clear();
-    _monthlyAirQuality.clear();
   }
 }

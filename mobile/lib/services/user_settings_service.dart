@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,8 +11,15 @@ class UserSettingsService {
   factory UserSettingsService() => _instance;
   UserSettingsService._internal();
 
-  // Backend URL
-  static const String baseUrl = 'http://localhost:8000/api';
+  // Backend URL - automatically detect if running on emulator
+  String get baseUrl {
+    // If running on Android emulator, use special IP for localhost
+    if (Platform.isAndroid) {
+      return 'http://10.0.2.2:8000/api';
+    } else {
+      return 'http://localhost:8000/api';
+    }
+  }
 
   // Stream controller for settings updates
   final _settingsStreamController =
@@ -28,6 +36,9 @@ class UserSettingsService {
       'voc': 500,
     },
     'refresh_rate': 30,
+    'health_advice_enabled': true,
+    'extreme_value_alerts_enabled': true,
+    'daily_reports_enabled': true,
   };
 
   // Stream that components can listen to
@@ -82,17 +93,26 @@ class UserSettingsService {
     try {
       final headers = await _getHeaders();
 
+      debugPrint('Syncing settings from: $baseUrl/settings');
+
       // Fetch settings from backend
       final response = await http.get(
         Uri.parse('$baseUrl/settings'),
         headers: headers,
       );
 
+      debugPrint('Settings sync response status: ${response.statusCode}');
+
       if (response.statusCode == 200) {
         final backendSettings = json.decode(response.body);
 
-        // Merge with existing settings (keep local refresh_rate)
+        // Merge with existing settings (keep local refresh_rate and notification settings)
         final refreshRate = _currentSettings['refresh_rate'];
+        final healthAdviceEnabled = _currentSettings['health_advice_enabled'];
+        final extremeValueAlertsEnabled =
+            _currentSettings['extreme_value_alerts_enabled'];
+        final dailyReportsEnabled = _currentSettings['daily_reports_enabled'];
+
         _currentSettings = {
           'notifications': backendSettings['notifications'] ?? true,
           'format': backendSettings['format'] ?? 'metric',
@@ -103,7 +123,10 @@ class UserSettingsService {
                 'pm10': 50,
                 'voc': 500,
               },
-          'refresh_rate': refreshRate,
+          'refresh_rate': refreshRate ?? 30,
+          'health_advice_enabled': healthAdviceEnabled ?? true,
+          'extreme_value_alerts_enabled': extremeValueAlertsEnabled ?? true,
+          'daily_reports_enabled': dailyReportsEnabled ?? true,
         };
 
         await _saveSettingsToLocal();
@@ -111,6 +134,7 @@ class UserSettingsService {
       }
     } catch (e) {
       debugPrint('Error syncing with backend: $e');
+      debugPrint('Stack trace: ${StackTrace.current}');
     }
   }
 
@@ -122,12 +146,17 @@ class UserSettingsService {
       await _saveSettingsToLocal();
       _settingsStreamController.add(_currentSettings);
 
-      // Prepare backend update (exclude refresh_rate which is local only)
+      // Prepare backend update (exclude refresh_rate and notification settings which are local only)
       final backendUpdates = Map<String, dynamic>.from(updates);
       backendUpdates.remove('refresh_rate');
+      backendUpdates.remove('health_advice_enabled');
+      backendUpdates.remove('extreme_value_alerts_enabled');
+      backendUpdates.remove('daily_reports_enabled');
 
       if (backendUpdates.isNotEmpty) {
         final headers = await _getHeaders();
+
+        debugPrint('Updating backend settings: $backendUpdates');
 
         final response = await http.post(
           Uri.parse('$baseUrl/settings'),
@@ -139,8 +168,11 @@ class UserSettingsService {
           }),
         );
 
+        debugPrint('Settings update response status: ${response.statusCode}');
+
         if (response.statusCode != 200) {
-          throw Exception('Failed to update settings on server');
+          throw Exception(
+              'Failed to update settings on server: ${response.statusCode}');
         }
       }
 
@@ -155,6 +187,7 @@ class UserSettingsService {
       return true;
     } catch (e) {
       debugPrint('Error updating settings: $e');
+      debugPrint('Stack trace: ${StackTrace.current}');
 
       // Revert local changes on error
       await _loadSettingsFromLocal();

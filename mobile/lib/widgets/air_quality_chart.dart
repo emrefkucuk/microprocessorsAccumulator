@@ -27,9 +27,7 @@ class AirQualityChart extends StatelessWidget {
     final hasOutliers = _hasSignificantOutliers();
 
     // For monthly charts with outliers, use a different scaling strategy
-    final yAxisMax = (isMonthlyChart && hasOutliers) 
-        ? avgAqi * 1.5 
-        : maxAqi;
+    final yAxisMax = (isMonthlyChart && hasOutliers) ? avgAqi * 1.5 : maxAqi;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -70,11 +68,13 @@ class AirQualityChart extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.only(top: 4, right: 8),
                 child: GestureDetector(
-                  onTapDown: (details) => _showTooltip(context, details.localPosition),
+                  onTapDown: (details) =>
+                      _showTooltip(context, details.localPosition),
                   child: CustomPaint(
                     painter: ChartPainter(
                       data: data,
                       color: Theme.of(context).primaryColor,
+                      maxY: yAxisMax,
                     ),
                   ),
                 ),
@@ -94,17 +94,20 @@ class AirQualityChart extends StatelessWidget {
   // Show tooltip with data point information
   void _showTooltip(BuildContext context, Offset position) {
     if (data.isEmpty) return;
-    
+
     // Calculate which data point is closest to the tap position
-    final chartWidth = MediaQuery.of(context).size.width - 60; // Account for y-axis width and padding
-    final pointIndex = ((position.dx / chartWidth) * (data.length - 1)).round().clamp(0, data.length - 1);
-    
+    final chartWidth = MediaQuery.of(context).size.width -
+        60; // Account for y-axis width and padding
+    final pointIndex = ((position.dx / chartWidth) * (data.length - 1))
+        .round()
+        .clamp(0, data.length - 1);
+
     final point = data[pointIndex];
-    
+
     // Format date based on chart type (daily or monthly)
     final dateFormat = timeFormat == 'HH:mm' ? 'HH:mm' : 'dd/MM/yyyy';
     final dateString = DateFormat(dateFormat).format(point.timestamp);
-    
+
     // Show tooltip as a popup
     showDialog(
       context: context,
@@ -182,7 +185,7 @@ class AirQualityChart extends StatelessWidget {
   // Calculate average AQI
   double _calculateAverage() {
     if (data.isEmpty) return 50;
-    
+
     double sum = 0;
     for (final point in data) {
       sum += point.aqi.toDouble();
@@ -193,39 +196,39 @@ class AirQualityChart extends StatelessWidget {
   // Check if there are significant outliers that would make the chart less readable
   bool _hasSignificantOutliers() {
     if (data.length < 3) return false;
-    
+
     final avg = _calculateAverage();
     double maxDiff = 0;
-    
+
     for (final point in data) {
       final diff = (point.aqi - avg).abs();
       if (diff > maxDiff) {
         maxDiff = diff;
       }
     }
-    
+
     // If the max difference from average is more than 150% of average, consider it an outlier
     return maxDiff > avg * 1.5;
   }
 
   Widget _buildTimeLabels() {
     if (data.isEmpty) return const SizedBox();
-    
+
     // For monthly chart, dynamically determine the number of labels based on data range
     if (timeFormat == 'dd/MM') {
       // Calculate the date range of the data
       final firstDay = data.first.timestamp;
       final lastDay = data.last.timestamp;
       final totalDays = lastDay.difference(firstDay).inDays + 1;
-      
+
       // Dynamically adjust the number of labels based on the date range
       // For a full month (~30 days), show ~5-6 labels
       int labelCount = totalDays <= 7 ? totalDays : (totalDays ~/ 5);
       labelCount = labelCount.clamp(2, 6); // At least 2, at most 6 labels
-      
+
       // Calculate step size based on data distribution
       final step = (data.length / labelCount).round().clamp(1, data.length);
-      
+
       return Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -294,17 +297,17 @@ class AirQualityChart extends StatelessWidget {
 class ChartPainter extends CustomPainter {
   final List<AirQualityData> data;
   final Color color;
+  final double maxY;
 
   ChartPainter({
     required this.data,
     required this.color,
+    required this.maxY,
   });
+
   @override
   void paint(Canvas canvas, Size size) {
     if (data.isEmpty) return;
-
-    // Calculate the appropriate maximum value for the y-axis
-    final double maxY = _getMaxValue() * 1.2; // Add 20% padding
 
     final paint = Paint()
       ..color = color
@@ -317,27 +320,25 @@ class ChartPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     // Draw grid lines
-    _drawGridLines(canvas, size, maxY);
+    _drawGridLines(canvas, size);
 
     // Create path for the line
     final path = Path();
     final fillPath = Path();
 
     for (int i = 0; i < data.length; i++) {
-      double x = i * size.width / (data.length - 1);
-      double y = size.height - (data[i].aqi / maxY * size.height);
-      
+      final x = i * size.width / (data.length - 1);
+      final y = size.height - (data[i].aqi / maxY * size.height);
+
       // Clamp very high values that exceed our scale to the top of the chart
-      if (data[i].aqi > maxY) {
-        y = 0;
-      }
+      final clampedY = y.clamp(0.0, size.height);
 
       if (i == 0) {
-        path.moveTo(x, y);
-        fillPath.moveTo(x, y);
+        path.moveTo(x, clampedY);
+        fillPath.moveTo(x, clampedY);
       } else {
-        path.lineTo(x, y);
-        fillPath.lineTo(x, y);
+        path.lineTo(x, clampedY);
+        fillPath.lineTo(x, clampedY);
       }
     }
 
@@ -353,35 +354,7 @@ class ChartPainter extends CustomPainter {
     canvas.drawPath(path, paint);
   }
 
-  // Calculate an appropriate y-axis maximum that makes the chart readable
-  double _calculateMaxYScale() {
-    if (data.isEmpty) return 100;
-
-    double max = 0;
-    double sum = 0;
-    int count = 0;
-    
-    // Calculate max and average
-    for (final point in data) {
-      if (point.aqi > max) {
-        max = point.aqi.toDouble();
-      }
-      sum += point.aqi.toDouble();
-      count++;
-    }
-    
-    final avg = sum / count;
-    
-    // If we have significant outliers, use a scaled approach
-    if (max > avg * 2.5) {
-      // Use a value closer to average but still showing some of the max range
-      return avg * 1.8;
-    }
-    
-    return max < 50 ? 50 : max;
-  }
-
-  void _drawGridLines(Canvas canvas, Size size, double maxY) {
+  void _drawGridLines(Canvas canvas, Size size) {
     final gridPaint = Paint()
       ..color = Colors.grey.withOpacity(0.3)
       ..strokeWidth = 1.0;
@@ -399,7 +372,7 @@ class ChartPainter extends CustomPainter {
 
     // Vertical grid lines - for daily charts, show more lines
     int verticalLines;
-    
+
     if (data.length <= 7) {
       // For few data points, show one for each point
       verticalLines = data.length - 1;
@@ -413,10 +386,10 @@ class ChartPainter extends CustomPainter {
       // For large datasets, limit the number of lines
       verticalLines = 7;
     }
-    
+
     // Ensure at least 2 vertical lines
     verticalLines = verticalLines.clamp(2, 10);
-    
+
     for (int i = 0; i <= verticalLines; i++) {
       final x = i * size.width / verticalLines;
       canvas.drawLine(
@@ -426,35 +399,11 @@ class ChartPainter extends CustomPainter {
       );
     }
   }
-  double _getMaxValue() {
-    if (data.isEmpty) return 100;
-
-    // Calculate both max value and average
-    double max = 0;
-    double sum = 0;
-    
-    for (final point in data) {
-      if (point.aqi > max) {
-        max = point.aqi.toDouble();
-      }
-      sum += point.aqi.toDouble();
-    }
-    
-    final avg = sum / data.length;
-    
-    // If max is much higher than average (outlier), use a more reasonable scale
-    // This prevents a single outlier from making the chart too flat
-    if (max > avg * 2.5) {
-      // Use a value between average and max to make chart more readable
-      return avg * 1.5 < max * 0.7 ? avg * 1.5 : max * 0.7;
-    }
-    
-    // Ensure we have at least a minimum scale
-    return max < 50 ? 50 : max;
-  }
 
   @override
   bool shouldRepaint(ChartPainter oldDelegate) {
-    return oldDelegate.data != data || oldDelegate.color != color;
+    return oldDelegate.data != data ||
+        oldDelegate.color != color ||
+        oldDelegate.maxY != maxY;
   }
 }
