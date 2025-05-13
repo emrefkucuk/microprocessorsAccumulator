@@ -6,6 +6,7 @@ import 'screens/settings_screen.dart';
 import 'services/auth_service.dart';
 import 'services/data_service.dart';
 import 'services/notification_service.dart';
+import 'services/user_settings_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 // Add this to your main.dart to help diagnose network issues
 import 'dart:io';
@@ -28,15 +29,19 @@ void printNetworkInfo() {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Print network debugging info
+  printNetworkInfo();
+
   // Initialize services with timeout
   try {
     await Future.wait([
+      UserSettingsService().init(),
       NotificationService().init(),
-      DataService().init(),
+      // DataService().init(), // Initialize DataService after navigating to main page
     ]).timeout(const Duration(seconds: 10));
   } catch (e) {
     debugPrint('Error initializing services: $e');
-    // Continue anyway with mock data
+    // Continue anyway with cached data
   }
 
   // Check remember me and authentication
@@ -59,6 +64,7 @@ class AirQualityApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Air Quality Monitor',
+      navigatorKey: navigatorKey, // Use the global navigator key
       theme: ThemeData(
         primarySwatch: Colors.purple,
         visualDensity: VisualDensity.adaptivePlatformDensity,

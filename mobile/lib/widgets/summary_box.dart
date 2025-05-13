@@ -33,21 +33,34 @@ class SummaryBox extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header with location and AQI in separate rows
+          Text(
+            'Air Quality: ${airQualityData.statusText}',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Air Quality: ${airQualityData.statusText}',
+                'Ankara',
                 style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  fontWeight: FontWeight.normal,
                   color: textColor,
                 ),
               ),
+              // AQI badge
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
-                  vertical: 6,
+                  vertical: 4,
                 ),
                 decoration: BoxDecoration(
                   color: textColor.withOpacity(0.2),
@@ -63,8 +76,11 @@ class SummaryBox extends StatelessWidget {
               ),
             ],
           ),
+
           const SizedBox(height: 16),
+
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildInfoItem(
                 context,
@@ -74,7 +90,6 @@ class SummaryBox extends StatelessWidget {
                 textColor: textColor,
                 subtleTextColor: subtleTextColor,
               ),
-              const SizedBox(width: 24),
               _buildInfoItem(
                 context,
                 icon: Icons.water_drop,
@@ -85,7 +100,9 @@ class SummaryBox extends StatelessWidget {
               ),
             ],
           ),
+
           const SizedBox(height: 8),
+
           Text(
             'Last Updated: ${_formatDateTime(airQualityData.timestamp)}',
             style: TextStyle(

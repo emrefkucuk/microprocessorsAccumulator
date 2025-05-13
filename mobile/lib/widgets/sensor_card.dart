@@ -11,6 +11,10 @@ class SensorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Calculate appropriate text color based on status color
+    final Color statusBgColor = sensorData.statusColor;
+    final Color statusTextColor = _getTextColorForBackground(statusBgColor);
+
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -48,8 +52,8 @@ class SensorCard extends StatelessWidget {
                     ),
                     child: Text(
                       _getStatusText(),
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: statusTextColor, // Use contrasting text color
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -151,5 +155,21 @@ class SensorCard extends StatelessWidget {
 
   String _formatTime(DateTime time) {
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  /// Determines the best text color (black or white) based on background color
+  Color _getTextColorForBackground(Color backgroundColor) {
+    // Calculate relative luminance using the formula
+    // L = 0.2126 * R + 0.7152 * G + 0.0722 * B
+    // where R, G, and B are between 0 and 1
+
+    final double r = backgroundColor.red / 255;
+    final double g = backgroundColor.green / 255;
+    final double b = backgroundColor.blue / 255;
+
+    final double luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+    // If luminance is greater than 0.5, use black text; otherwise, use white
+    return luminance > 0.6 ? Colors.black : Colors.white;
   }
 }

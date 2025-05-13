@@ -285,6 +285,33 @@ def acknowledge_alert(
 
     return alert
 
+#TÜM ALERTLERİ ACKNOWLEDGE ET
+@app.post("/api/alerts/acknowledgeall")
+def acknowledge_all_alerts(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    # Kullanıcının acknowledged=False olan tüm uyarılarını al
+    unacknowledged_alerts = db.query(models.Alert).filter(
+        models.Alert.user_id == current_user.id,
+        models.Alert.acknowledged == False
+    ).all()
+
+    if not unacknowledged_alerts:
+        return {"message": "Tüm uyarılar zaten acknowledge edilmiş."}
+
+    # Tüm uyarıları acknowledge olarak işaretle
+    for alert in unacknowledged_alerts:
+        alert.acknowledged = True
+
+    db.commit()
+
+    return {
+        "message": f"{len(unacknowledged_alerts)} uyarı acknowledge edildi.",
+        "acknowledged_ids": [alert.id for alert in unacknowledged_alerts]
+    }
+
+
 #USER AUTHENTICATION
 @app.post("/auth/register", response_model=schemas.UserOut)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):

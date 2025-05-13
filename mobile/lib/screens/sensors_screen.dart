@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/sensor_data.dart';
 import '../services/data_service.dart';
 import '../widgets/sensor_card.dart';
+import '../widgets/failsafe_widget.dart';
 
 class SensorsScreen extends StatefulWidget {
   const SensorsScreen({Key? key}) : super(key: key);
@@ -65,7 +66,10 @@ class _SensorsScreenState extends State<SensorsScreen> {
                     itemBuilder: (context, index) {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 16.0),
-                        child: SensorCard(sensorData: sensors[index]),
+                        child: FailsafeWidget(
+                          fallbackMessage: 'Unable to display sensor data',
+                          child: SensorCard(sensorData: sensors[index]),
+                        ),
                       );
                     },
                   );

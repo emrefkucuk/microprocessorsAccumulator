@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/air_quality_data.dart';
 import '../models/sensor_data.dart';
@@ -17,6 +18,7 @@ class NotificationService {
 
   // Backend URL - automatically detect if running on emulator
   String get baseUrl {
+    // If running on Android emulator, use special IP for localhost
     if (Platform.isAndroid) {
       return 'http://10.0.2.2:8000/api';
     } else {
@@ -40,7 +42,6 @@ class NotificationService {
   bool get dailyReportsEnabled =>
       _settingsService.getSetting<bool>('daily_reports_enabled') ?? true;
 
-  // Initialize the notifications service
   // Initialize the notifications service
   Future<void> init() async {
     debugPrint('🔔 Notification service initialized');
@@ -82,24 +83,37 @@ class NotificationService {
       final headers = await _getHeaders();
       if (headers['Authorization'] == null) return; // Not logged in
 
+      debugPrint('Checking alerts from: $baseUrl/alerts/recent');
+
       final response = await http.get(
         Uri.parse('$baseUrl/alerts/recent'),
         headers: headers,
       );
 
+      debugPrint('Alerts response status: ${response.statusCode}');
+
       if (response.statusCode == 200) {
         final List<dynamic> alerts = json.decode(response.body);
+        debugPrint('Received ${alerts.length} alerts');
 
         for (final alert in alerts) {
+          final alertId = (alert['id'] as num).toInt();
+
+          // Skip if already acknowledged locally
+          if (await _isAlertAcknowledged(alertId)) {
+            continue;
+          }
+
+          // Show the alert and mark as acknowledged
           if (!alert['acknowledged']) {
             _showBackendAlert(alert);
-            // Mark as acknowledged in backend
-            await _acknowledgeAlert(alert['id']);
+            await _acknowledgeAlert(alertId);
           }
         }
       }
     } catch (e) {
       debugPrint('Error checking backend alerts: $e');
+      debugPrint('Stack trace: ${StackTrace.current}');
     }
   }
 
@@ -123,13 +137,55 @@ class NotificationService {
     try {
       final headers = await _getHeaders();
 
-      // Note: This endpoint might need to be implemented in your backend
-      await http.put(
-        Uri.parse('$baseUrl/alerts/$alertId/acknowledge'),
-        headers: headers,
-      );
+      // Save locally as acknowledged even if the backend endpoint doesn't exist
+      _saveAcknowledgedAlert(alertId);
+
+      debugPrint('Acknowledging alert with ID: $alertId');
+
+      try {
+        // Try the proper endpoint from your backend
+        await http.post(
+          Uri.parse('$baseUrl/alerts/acknowledge'),
+          headers: headers,
+          body: json.encode({
+            'alert_id': alertId,
+          }),
+        );
+      } catch (e) {
+        // If that fails, just log it - we've already saved it locally
+        debugPrint('Error with backend alert acknowledgment: $e');
+      }
     } catch (e) {
       debugPrint('Error acknowledging alert: $e');
+    }
+  }
+
+  // Save acknowledged alert locally
+  Future<void> _saveAcknowledgedAlert(int alertId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final acknowledgedAlerts =
+          prefs.getStringList('acknowledged_alerts') ?? [];
+
+      if (!acknowledgedAlerts.contains(alertId.toString())) {
+        acknowledgedAlerts.add(alertId.toString());
+        await prefs.setStringList('acknowledged_alerts', acknowledgedAlerts);
+      }
+    } catch (e) {
+      debugPrint('Error saving acknowledged alert: $e');
+    }
+  }
+
+  // Check if alert is already acknowledged
+  Future<bool> _isAlertAcknowledged(int alertId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final acknowledgedAlerts =
+          prefs.getStringList('acknowledged_alerts') ?? [];
+      return acknowledgedAlerts.contains(alertId.toString());
+    } catch (e) {
+      debugPrint('Error checking acknowledged alert: $e');
+      return false;
     }
   }
 
@@ -210,15 +266,50 @@ class NotificationService {
   void _checkAirQualityAlerts(AirQualityData data) {
     if (!extremeValueAlertsEnabled) return;
 
-    // Send alert if status is unhealthy
-    if (data.status == AirQualityStatus.unhealthy) {
-      _showNotification(
-        id: 1,
-        title: 'Air Quality Alert',
-        body:
-            'Air quality has deteriorated to unhealthy levels (AQI: ${data.aqi}).',
-        priority: 'high',
-      );
+    // Send alert based on the air quality status
+    switch (data.status) {
+      case AirQualityStatus.good:
+        // No alerts for good air quality
+        break;
+      case AirQualityStatus.moderate:
+        // Optional mild alert for moderate
+        break;
+      case AirQualityStatus.unhealthyForSensitiveGroups:
+        _showNotification(
+          id: 1,
+          title: 'Air Quality Alert',
+          body:
+              'Air quality is unhealthy for sensitive groups (AQI: ${data.aqi}).',
+          priority: 'medium',
+        );
+        break;
+      case AirQualityStatus.unhealthy:
+        _showNotification(
+          id: 2,
+          title: 'Air Quality Alert',
+          body:
+              'Air quality has deteriorated to unhealthy levels (AQI: ${data.aqi}).',
+          priority: 'high',
+        );
+        break;
+      case AirQualityStatus.veryUnhealthy:
+        _showNotification(
+          id: 3,
+          title: 'Air Quality Warning',
+          body:
+              'Air quality is very unhealthy. Avoid outdoor activities (AQI: ${data.aqi}).',
+          priority: 'critical',
+        );
+        break;
+      case AirQualityStatus.hazardous:
+        _showNotification(
+          id: 4,
+          title: 'Air Quality Emergency',
+          body:
+              'Hazardous air quality detected! Stay indoors (AQI: ${data.aqi}).',
+          priority: 'critical',
+        );
+        break;
     }
   }
 
@@ -229,7 +320,7 @@ class NotificationService {
     for (final sensor in sensors) {
       if (sensor.status == SensorStatus.critical) {
         _showNotification(
-          id: 2,
+          id: 10 + sensors.indexOf(sensor),
           title: '${sensor.name} Alert',
           body:
               '${sensor.name} has reached critical levels: ${sensor.value} ${sensor.unit}',
@@ -237,7 +328,7 @@ class NotificationService {
         );
       } else if (sensor.status == SensorStatus.warning) {
         _showNotification(
-          id: 3,
+          id: 20 + sensors.indexOf(sensor),
           title: '${sensor.name} Warning',
           body:
               '${sensor.name} has reached warning levels: ${sensor.value} ${sensor.unit}',
@@ -262,13 +353,22 @@ class NotificationService {
       case AirQualityStatus.moderate:
         statusText = 'Moderate';
         break;
+      case AirQualityStatus.unhealthyForSensitiveGroups:
+        statusText = 'Unhealthy for Sensitive Groups';
+        break;
       case AirQualityStatus.unhealthy:
         statusText = 'Unhealthy';
+        break;
+      case AirQualityStatus.veryUnhealthy:
+        statusText = 'Very Unhealthy';
+        break;
+      case AirQualityStatus.hazardous:
+        statusText = 'Hazardous';
         break;
     }
 
     _showNotification(
-      id: 4,
+      id: 5,
       title: 'Daily Air Quality Report',
       body:
           'Today\'s average AQI: ${data.aqi} ($statusText). Temperature: ${data.temperature}°C, Humidity: ${data.humidity}%',
@@ -285,18 +385,34 @@ class NotificationService {
 
     String advice;
 
-    if (data.status == AirQualityStatus.good) {
-      advice = 'Air quality is good. Perfect time for outdoor activities!';
-    } else if (data.status == AirQualityStatus.moderate) {
-      advice =
-          'Air quality is moderate. Consider reducing prolonged outdoor activities if you\'re sensitive.';
-    } else {
-      advice =
-          'Air quality is unhealthy. Consider staying indoors and keeping windows closed.';
+    switch (data.status) {
+      case AirQualityStatus.good:
+        advice = 'Air quality is good. Perfect time for outdoor activities!';
+        break;
+      case AirQualityStatus.moderate:
+        advice =
+            'Air quality is moderate. Consider reducing prolonged outdoor activities if you\'re sensitive.';
+        break;
+      case AirQualityStatus.unhealthyForSensitiveGroups:
+        advice =
+            'Air quality is unhealthy for sensitive groups. Limit prolonged outdoor exertion if you have respiratory issues.';
+        break;
+      case AirQualityStatus.unhealthy:
+        advice =
+            'Air quality is unhealthy. Consider staying indoors and keeping windows closed.';
+        break;
+      case AirQualityStatus.veryUnhealthy:
+        advice =
+            'Air quality is very unhealthy. Avoid outdoor activities and use air purifiers indoors if available.';
+        break;
+      case AirQualityStatus.hazardous:
+        advice =
+            'Air quality is hazardous. Stay indoors with windows closed. Use air purifiers if available.';
+        break;
     }
 
     _showNotification(
-      id: 5,
+      id: 6,
       title: 'Health Advice',
       body: advice,
       priority: 'low',
