@@ -14,7 +14,6 @@ class AuthService {
     // If running on Android emulator, use special IP for localhost
     // Otherwise, use localhost directly
     if (Platform.isAndroid) {
-      // Check if the host name contains 'emulator' or if we're in debug mode
       return 'http://10.0.2.2:8000';
     } else {
       return 'http://localhost:8000';
@@ -176,7 +175,6 @@ class AuthService {
       await prefs.setBool(_authKey, false);
       await prefs.remove(_userEmailKey);
       await prefs.remove(_authTokenKey);
-      await prefs.setBool('remember_me', false); // Remember Me sıfırlansın
     } catch (e) {
       debugPrint('Logout error: $e');
     }

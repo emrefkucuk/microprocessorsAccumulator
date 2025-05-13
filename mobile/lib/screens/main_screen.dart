@@ -3,6 +3,7 @@ import '../models/air_quality_data.dart';
 import '../services/data_service.dart';
 import '../widgets/summary_box.dart';
 import '../widgets/air_quality_chart.dart';
+import '../widgets/ai_prediction_box.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);
@@ -21,26 +22,47 @@ class _MainScreenState extends State<MainScreen> {
     _dataService = DataService();
     _loadData();
   }
+
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      await _dataService.refreshData();
-      // Debug output to verify data is loaded
-      debugPrint('Daily air quality data size: ${_dataService.dailyAirQuality.length}');
-      debugPrint('Monthly air quality data size: ${_dataService.monthlyAirQuality.length}');
-      
+      // Explicitly request historical data refresh
+      await _dataService.refreshData(includeHistorical: true);
+
+      // Log data status after refresh
+      debugPrint(
+          'Data refreshed - Daily data: ${_dataService.dailyAirQuality.length} items');
+      debugPrint(
+          'Data refreshed - Monthly data: ${_dataService.monthlyAirQuality.length} items');
+
+      // Verify stream controllers have data
+      _dataService.dailyAirQualityStream.first.then((data) {
+        debugPrint('Daily stream data count: ${data.length}');
+      }).catchError((e) {
+        debugPrint('Error getting daily stream data: $e');
+      });
+
+      _dataService.monthlyAirQualityStream.first.then((data) {
+        debugPrint('Monthly stream data count: ${data.length}');
+      }).catchError((e) {
+        debugPrint('Error getting monthly stream data: $e');
+      });
     } catch (e) {
       debugPrint('Error loading data: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error refreshing data: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error refreshing data: $e')),
+        );
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -77,7 +99,7 @@ class _MainScreenState extends State<MainScreen> {
                           return SummaryBox(airQualityData: snapshot.data!);
                         } else {
                           return Container(
-                            height: 140,
+                            height: 150, // Increased height
                             padding: const EdgeInsets.all(16.0),
                             decoration: BoxDecoration(
                               color: Colors.grey.shade300,
@@ -97,7 +119,42 @@ class _MainScreenState extends State<MainScreen> {
                       },
                     ),
 
-                    const SizedBox(height: 24),                    // Daily Chart
+                    const SizedBox(height: 20), // More space
+
+                    // AI Prediction Box
+                    StreamBuilder<AirQualityData>(
+                      stream: _dataService.airQualityStream,
+                      initialData: _dataService.currentAirQuality,
+                      builder: (context, snapshot) {
+                        if (snapshot.hasData && snapshot.data != null) {
+                          return AIPredictionBox(
+                              airQualityData: snapshot.data!);
+                        } else {
+                          return Container(
+                            height: 150, // Increased height further
+                            margin: const EdgeInsets.only(top: 12.0),
+                            padding: const EdgeInsets.all(16.0),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(12.0),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                'Loading AI prediction...',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+
+                    const SizedBox(height: 32), // More space
+
+                    // Daily Chart
                     const Text(
                       'Daily Air Quality',
                       style: TextStyle(
@@ -107,17 +164,34 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                     const SizedBox(height: 8),
                     SizedBox(
-                      height: 250, // Increased height for better chart visibility
+                      height: 225, // Height for chart
                       child: StreamBuilder<List<AirQualityData>>(
                         stream: _dataService.dailyAirQualityStream,
                         initialData: _dataService.dailyAirQuality,
                         builder: (context, snapshot) {
-                          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                          // Debug information
+                          debugPrint(
+                              'Daily data snapshot: hasData=${snapshot.hasData}, isEmpty=${snapshot.data?.isEmpty}');
+                          if (snapshot.data != null) {
+                            debugPrint(
+                                'Daily data count: ${snapshot.data!.length}');
+                          }
+
+                          if (snapshot.hasData &&
+                              snapshot.data != null &&
+                              snapshot.data!.isNotEmpty) {
                             return AirQualityChart(
                               data: snapshot.data!,
                               timeFormat: 'HH:mm',
                             );
                           } else {
+                            // Check for initialization - force a data refresh if empty
+                            if (_dataService.dailyAirQuality.isEmpty) {
+                              debugPrint(
+                                  'Daily air quality is empty, force refreshing...');
+                              Future.microtask(() => _loadData());
+                            }
+
                             return Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -128,8 +202,8 @@ class _MainScreenState extends State<MainScreen> {
                                     size: 36,
                                   ),
                                   const SizedBox(height: 8),
-                                  Text(
-                                    'Bu gün için veri bulunamadı',
+                                  const Text(
+                                    'Getting daily data...',
                                     style: TextStyle(color: Colors.grey),
                                     textAlign: TextAlign.center,
                                   ),
@@ -141,7 +215,9 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 24),                    // Monthly Chart
+                    const SizedBox(height: 32), // More space
+
+                    // Monthly Chart
                     const Text(
                       'Monthly Air Quality',
                       style: TextStyle(
@@ -151,17 +227,34 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                     const SizedBox(height: 8),
                     SizedBox(
-                      height: 250, // Increased height for better chart visibility
+                      height: 225, // Height for chart
                       child: StreamBuilder<List<AirQualityData>>(
                         stream: _dataService.monthlyAirQualityStream,
                         initialData: _dataService.monthlyAirQuality,
                         builder: (context, snapshot) {
-                          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                          // Debug information
+                          debugPrint(
+                              'Monthly data snapshot: hasData=${snapshot.hasData}, isEmpty=${snapshot.data?.isEmpty}');
+                          if (snapshot.data != null) {
+                            debugPrint(
+                                'Monthly data count: ${snapshot.data!.length}');
+                          }
+
+                          if (snapshot.hasData &&
+                              snapshot.data != null &&
+                              snapshot.data!.isNotEmpty) {
                             return AirQualityChart(
                               data: snapshot.data!,
                               timeFormat: 'dd/MM',
                             );
                           } else {
+                            // Check for initialization - force a data refresh if empty
+                            if (_dataService.monthlyAirQuality.isEmpty) {
+                              debugPrint(
+                                  'Monthly air quality is empty, force refreshing...');
+                              Future.microtask(() => _loadData());
+                            }
+
                             return Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -172,8 +265,8 @@ class _MainScreenState extends State<MainScreen> {
                                     size: 36,
                                   ),
                                   const SizedBox(height: 8),
-                                  Text(
-                                    'Bu ay için veri bulunamadı',
+                                  const Text(
+                                    'Getting monthly data...',
                                     style: TextStyle(color: Colors.grey),
                                     textAlign: TextAlign.center,
                                   ),
@@ -185,7 +278,7 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 32), // More space
 
                     // Sensors Button
                     Center(
@@ -203,6 +296,8 @@ class _MainScreenState extends State<MainScreen> {
                         ),
                       ),
                     ),
+
+                    const SizedBox(height: 24), // Add extra space at the bottom
                   ],
                 ),
               ),
