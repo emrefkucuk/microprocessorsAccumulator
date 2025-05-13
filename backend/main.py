@@ -297,6 +297,17 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+
+    # Varsayılan kullanıcı ayarları ekleme
+    default_settings = models.UserSettings(
+        user_id=db_user.id,
+        notifications=True,
+        format="metric",
+        thresholds={"co2": 1000, "pm25": 35, "pm10": 50, "voc": 500}
+    )
+    db.add(default_settings)
+    db.commit()
+    db.refresh(default_settings)
     return db_user
 
 @app.post("/auth/login", response_model=schemas.Token)
